@@ -5,3 +5,4 @@ data/baseline_features.pkl
 data/fetch_*.log
 data/bt/
 data/bt_full.log
+backtest/results_regime/trades.csv

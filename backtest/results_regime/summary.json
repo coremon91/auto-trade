@@ -1,0 +1,1418 @@
+{
+ "1_bear": {
+  "name": "하락장 (최근 1년)",
+  "start": "2025-10-06",
+  "end": "2026-11-26",
+  "btc_buy_hold": -50.9,
+  "variants": {
+   "4h|X1|A": {
+    "n": 431,
+    "syms": 282,
+    "win": 0.292,
+    "avg": -1.55,
+    "med": -6.93,
+    "PF": 0.68,
+    "sum": -669.5,
+    "port_ret": -48.9,
+    "port_mdd": -51.5,
+    "port_trades": 427,
+    "exits": {
+     "sl": 257,
+     "time": 125,
+     "tp": 47,
+     "eod": 2
+    }
+   },
+   "4h|X1|A|BTC>SMA20": {
+    "n": 109,
+    "syms": 91,
+    "win": 0.33,
+    "avg": -0.13,
+    "med": -6.76,
+    "PF": 0.97,
+    "sum": -14.2,
+    "port_ret": -2.1,
+    "port_mdd": -14.8,
+    "port_trades": 109,
+    "exits": {
+     "sl": 59,
+     "time": 31,
+     "tp": 19
+    }
+   },
+   "4h|X1|B": {
+    "n": 2458,
+    "syms": 588,
+    "win": 0.31,
+    "avg": -0.92,
+    "med": -5.55,
+    "PF": 0.8,
+    "sum": -2255.8,
+    "port_ret": -73.4,
+    "port_mdd": -74.4,
+    "port_trades": 1413,
+    "exits": {
+     "sl": 1290,
+     "time": 861,
+     "tp": 283,
+     "eod": 24
+    }
+   },
+   "4h|X1|B|BTC>SMA20": {
+    "n": 499,
+    "syms": 305,
+    "win": 0.289,
+    "avg": -0.71,
+    "med": -5.76,
+    "PF": 0.85,
+    "sum": -353.5,
+    "port_ret": -12.2,
+    "port_mdd": -24.5,
+    "port_trades": 430,
+    "exits": {
+     "sl": 265,
+     "time": 165,
+     "tp": 69
+    }
+   },
+   "4h|X2|A": {
+    "n": 431,
+    "syms": 282,
+    "win": 0.265,
+    "avg": -1.43,
+    "med": -4.84,
+    "PF": 0.65,
+    "sum": -615.0,
+    "port_ret": -46.1,
+    "port_mdd": -46.2,
+    "port_trades": 429,
+    "exits": {
+     "sl": 218,
+     "trail": 135,
+     "time": 76,
+     "eod": 2
+    }
+   },
+   "4h|X2|A|BTC>SMA20": {
+    "n": 109,
+    "syms": 91,
+    "win": 0.339,
+    "avg": -0.33,
+    "med": -2.19,
+    "PF": 0.91,
+    "sum": -36.4,
+    "port_ret": -4.1,
+    "port_mdd": -8.3,
+    "port_trades": 109,
+    "exits": {
+     "sl": 49,
+     "trail": 41,
+     "time": 19
+    }
+   },
+   "4h|X2|B": {
+    "n": 2458,
+    "syms": 588,
+    "win": 0.275,
+    "avg": -0.8,
+    "med": -2.94,
+    "PF": 0.79,
+    "sum": -1974.5,
+    "port_ret": -57.4,
+    "port_mdd": -62.7,
+    "port_trades": 1478,
+    "exits": {
+     "sl": 1071,
+     "trail": 752,
+     "time": 613,
+     "eod": 22
+    }
+   },
+   "4h|X2|B|BTC>SMA20": {
+    "n": 499,
+    "syms": 305,
+    "win": 0.291,
+    "avg": -0.54,
+    "med": -3.2,
+    "PF": 0.86,
+    "sum": -267.7,
+    "port_ret": -6.2,
+    "port_mdd": -20.2,
+    "port_trades": 434,
+    "exits": {
+     "sl": 208,
+     "trail": 165,
+     "time": 126
+    }
+   },
+   "mtf|X1|A": {
+    "n": 816,
+    "syms": 376,
+    "win": 0.244,
+    "avg": -1.22,
+    "med": -4.0,
+    "PF": 0.68,
+    "sum": -994.5,
+    "port_ret": -62.4,
+    "port_mdd": -65.7,
+    "port_trades": 780,
+    "exits": {
+     "sl": 552,
+     "time": 154,
+     "tp": 107,
+     "eod": 3
+    }
+   },
+   "mtf|X1|A|BTC>SMA20": {
+    "n": 194,
+    "syms": 141,
+    "win": 0.232,
+    "avg": -1.21,
+    "med": -3.98,
+    "PF": 0.68,
+    "sum": -234.3,
+    "port_ret": -21.6,
+    "port_mdd": -21.6,
+    "port_trades": 194,
+    "exits": {
+     "sl": 130,
+     "time": 35,
+     "tp": 28,
+     "eod": 1
+    }
+   },
+   "mtf|X1|B": {
+    "n": 5076,
+    "syms": 645,
+    "win": 0.293,
+    "avg": -0.63,
+    "med": -3.51,
+    "PF": 0.81,
+    "sum": -3197.9,
+    "port_ret": -74.6,
+    "port_mdd": -79.0,
+    "port_trades": 1986,
+    "exits": {
+     "sl": 3188,
+     "time": 1104,
+     "tp": 747,
+     "eod": 37
+    }
+   },
+   "mtf|X1|B|BTC>SMA20": {
+    "n": 904,
+    "syms": 411,
+    "win": 0.284,
+    "avg": -0.79,
+    "med": -3.67,
+    "PF": 0.77,
+    "sum": -718.2,
+    "port_ret": -39.6,
+    "port_mdd": -41.2,
+    "port_trades": 695,
+    "exits": {
+     "sl": 566,
+     "time": 205,
+     "tp": 131,
+     "eod": 2
+    }
+   },
+   "mtf|X2|A": {
+    "n": 816,
+    "syms": 376,
+    "win": 0.18,
+    "avg": -0.89,
+    "med": -3.2,
+    "PF": 0.7,
+    "sum": -725.6,
+    "port_ret": -50.2,
+    "port_mdd": -53.2,
+    "port_trades": 791,
+    "exits": {
+     "sl": 422,
+     "trail": 310,
+     "time": 83,
+     "eod": 1
+    }
+   },
+   "mtf|X2|A|BTC>SMA20": {
+    "n": 194,
+    "syms": 141,
+    "win": 0.17,
+    "avg": -0.76,
+    "med": -3.2,
+    "PF": 0.75,
+    "sum": -147.4,
+    "port_ret": -14.3,
+    "port_mdd": -14.8,
+    "port_trades": 194,
+    "exits": {
+     "sl": 101,
+     "trail": 74,
+     "time": 19
+    }
+   },
+   "mtf|X2|B": {
+    "n": 5076,
+    "syms": 645,
+    "win": 0.201,
+    "avg": -0.66,
+    "med": -3.2,
+    "PF": 0.76,
+    "sum": -3334.9,
+    "port_ret": -78.9,
+    "port_mdd": -82.6,
+    "port_trades": 2184,
+    "exits": {
+     "sl": 2558,
+     "trail": 1711,
+     "time": 779,
+     "eod": 28
+    }
+   },
+   "mtf|X2|B|BTC>SMA20": {
+    "n": 904,
+    "syms": 411,
+    "win": 0.194,
+    "avg": -0.62,
+    "med": -3.2,
+    "PF": 0.78,
+    "sum": -563.4,
+    "port_ret": -32.7,
+    "port_mdd": -35.5,
+    "port_trades": 712,
+    "exits": {
+     "sl": 439,
+     "trail": 329,
+     "time": 136
+    }
+   }
+  }
+ },
+ "2_bull": {
+  "name": "상승장 (24말~25중반)",
+  "start": "2024-11-05",
+  "end": "2025-07-14",
+  "btc_buy_hold": 76.2,
+  "variants": {
+   "4h|X1|A": {
+    "n": 144,
+    "syms": 106,
+    "win": 0.424,
+    "avg": 2.88,
+    "med": -2.82,
+    "PF": 1.73,
+    "sum": 414.6,
+    "port_ret": 26.4,
+    "port_mdd": -13.1,
+    "port_trades": 136,
+    "exits": {
+     "sl": 67,
+     "tp": 39,
+     "time": 38
+    }
+   },
+   "4h|X1|A|BTC>SMA20": {
+    "n": 62,
+    "syms": 53,
+    "win": 0.532,
+    "avg": 6.23,
+    "med": 1.47,
+    "PF": 2.76,
+    "sum": 386.0,
+    "port_ret": 26.8,
+    "port_mdd": -6.6,
+    "port_trades": 57,
+    "exits": {
+     "sl": 26,
+     "tp": 25,
+     "time": 11
+    }
+   },
+   "4h|X1|B": {
+    "n": 1081,
+    "syms": 391,
+    "win": 0.385,
+    "avg": -0.1,
+    "med": -4.59,
+    "PF": 0.97,
+    "sum": -112.2,
+    "port_ret": -25.6,
+    "port_mdd": -46.2,
+    "port_trades": 526,
+    "exits": {
+     "sl": 527,
+     "time": 430,
+     "tp": 124
+    }
+   },
+   "4h|X1|B|BTC>SMA20": {
+    "n": 292,
+    "syms": 202,
+    "win": 0.387,
+    "avg": 2.0,
+    "med": -6.01,
+    "PF": 1.45,
+    "sum": 585.0,
+    "port_ret": 6.6,
+    "port_mdd": -33.3,
+    "port_trades": 230,
+    "exits": {
+     "sl": 156,
+     "tp": 70,
+     "time": 66
+    }
+   },
+   "4h|X2|A": {
+    "n": 144,
+    "syms": 106,
+    "win": 0.382,
+    "avg": 3.45,
+    "med": -0.2,
+    "PF": 2.03,
+    "sum": 497.0,
+    "port_ret": 39.0,
+    "port_mdd": -12.0,
+    "port_trades": 135,
+    "exits": {
+     "sl": 58,
+     "trail": 49,
+     "time": 37
+    }
+   },
+   "4h|X2|A|BTC>SMA20": {
+    "n": 62,
+    "syms": 53,
+    "win": 0.484,
+    "avg": 8.19,
+    "med": -0.2,
+    "PF": 3.54,
+    "sum": 507.9,
+    "port_ret": 42.0,
+    "port_mdd": -6.9,
+    "port_trades": 57,
+    "exits": {
+     "sl": 24,
+     "trail": 22,
+     "time": 16
+    }
+   },
+   "4h|X2|B": {
+    "n": 1081,
+    "syms": 391,
+    "win": 0.352,
+    "avg": 0.39,
+    "med": -0.2,
+    "PF": 1.12,
+    "sum": 418.9,
+    "port_ret": -9.8,
+    "port_mdd": -45.6,
+    "port_trades": 536,
+    "exits": {
+     "sl": 427,
+     "trail": 327,
+     "time": 327
+    }
+   },
+   "4h|X2|B|BTC>SMA20": {
+    "n": 292,
+    "syms": 202,
+    "win": 0.373,
+    "avg": 2.67,
+    "med": -1.07,
+    "PF": 1.72,
+    "sum": 780.0,
+    "port_ret": 31.0,
+    "port_mdd": -27.7,
+    "port_trades": 232,
+    "exits": {
+     "sl": 132,
+     "trail": 100,
+     "time": 60
+    }
+   },
+   "mtf|X1|A": {
+    "n": 417,
+    "syms": 239,
+    "win": 0.199,
+    "avg": -1.79,
+    "med": -4.06,
+    "PF": 0.54,
+    "sum": -746.7,
+    "port_ret": -27.2,
+    "port_mdd": -31.4,
+    "port_trades": 292,
+    "exits": {
+     "sl": 317,
+     "time": 53,
+     "tp": 47
+    }
+   },
+   "mtf|X1|A|BTC>SMA20": {
+    "n": 114,
+    "syms": 93,
+    "win": 0.289,
+    "avg": 0.31,
+    "med": -3.81,
+    "PF": 1.09,
+    "sum": 35.3,
+    "port_ret": 2.1,
+    "port_mdd": -14.3,
+    "port_trades": 103,
+    "exits": {
+     "sl": 75,
+     "tp": 29,
+     "time": 10
+    }
+   },
+   "mtf|X1|B": {
+    "n": 2650,
+    "syms": 425,
+    "win": 0.242,
+    "avg": -1.52,
+    "med": -3.89,
+    "PF": 0.59,
+    "sum": -4017.2,
+    "port_ret": -57.7,
+    "port_mdd": -62.7,
+    "port_trades": 741,
+    "exits": {
+     "sl": 1788,
+     "time": 592,
+     "tp": 270
+    }
+   },
+   "mtf|X1|B|BTC>SMA20": {
+    "n": 801,
+    "syms": 345,
+    "win": 0.245,
+    "avg": -0.8,
+    "med": -3.85,
+    "PF": 0.78,
+    "sum": -641.6,
+    "port_ret": -16.4,
+    "port_mdd": -31.5,
+    "port_trades": 360,
+    "exits": {
+     "sl": 480,
+     "time": 194,
+     "tp": 127
+    }
+   },
+   "mtf|X2|A": {
+    "n": 417,
+    "syms": 239,
+    "win": 0.161,
+    "avg": -1.4,
+    "med": -3.76,
+    "PF": 0.59,
+    "sum": -585.2,
+    "port_ret": -18.2,
+    "port_mdd": -27.6,
+    "port_trades": 294,
+    "exits": {
+     "sl": 284,
+     "trail": 82,
+     "time": 51
+    }
+   },
+   "mtf|X2|A|BTC>SMA20": {
+    "n": 114,
+    "syms": 93,
+    "win": 0.211,
+    "avg": 1.45,
+    "med": -2.94,
+    "PF": 1.59,
+    "sum": 165.6,
+    "port_ret": 11.7,
+    "port_mdd": -13.4,
+    "port_trades": 103,
+    "exits": {
+     "sl": 56,
+     "trail": 39,
+     "time": 19
+    }
+   },
+   "mtf|X2|B": {
+    "n": 2650,
+    "syms": 425,
+    "win": 0.187,
+    "avg": -1.18,
+    "med": -3.2,
+    "PF": 0.61,
+    "sum": -3127.4,
+    "port_ret": -50.6,
+    "port_mdd": -58.5,
+    "port_trades": 777,
+    "exits": {
+     "sl": 1488,
+     "trail": 738,
+     "time": 424
+    }
+   },
+   "mtf|X2|B|BTC>SMA20": {
+    "n": 801,
+    "syms": 345,
+    "win": 0.182,
+    "avg": -0.06,
+    "med": -0.2,
+    "PF": 0.98,
+    "sum": -47.6,
+    "port_ret": -21.7,
+    "port_mdd": -33.8,
+    "port_trades": 365,
+    "exits": {
+     "sl": 359,
+     "trail": 343,
+     "time": 99
+    }
+   }
+  }
+ },
+ "3_halving": {
+  "name": "반감기 후 횡보 → 상승",
+  "start": "2024-04-20",
+  "end": "2024-12-17",
+  "btc_buy_hold": 67.3,
+  "variants": {
+   "4h|X1|A": {
+    "n": 42,
+    "syms": 40,
+    "win": 0.333,
+    "avg": -2.02,
+    "med": -6.28,
+    "PF": 0.56,
+    "sum": -84.7,
+    "port_ret": -8.2,
+    "port_mdd": -11.4,
+    "port_trades": 42,
+    "exits": {
+     "sl": 24,
+     "time": 16,
+     "tp": 2
+    }
+   },
+   "4h|X1|A|BTC>SMA20": {
+    "n": 12,
+    "syms": 12,
+    "win": 0.333,
+    "avg": -2.07,
+    "med": -6.62,
+    "PF": 0.57,
+    "sum": -24.8,
+    "port_ret": -2.5,
+    "port_mdd": -5.0,
+    "port_trades": 12,
+    "exits": {
+     "sl": 8,
+     "time": 3,
+     "tp": 1
+    }
+   },
+   "4h|X1|B": {
+    "n": 553,
+    "syms": 258,
+    "win": 0.25,
+    "avg": -3.02,
+    "med": -7.18,
+    "PF": 0.42,
+    "sum": -1667.9,
+    "port_ret": -9.8,
+    "port_mdd": -25.8,
+    "port_trades": 235,
+    "exits": {
+     "sl": 357,
+     "time": 170,
+     "tp": 26
+    }
+   },
+   "4h|X1|B|BTC>SMA20": {
+    "n": 279,
+    "syms": 200,
+    "win": 0.179,
+    "avg": -4.43,
+    "med": -8.0,
+    "PF": 0.27,
+    "sum": -1235.0,
+    "port_ret": -3.7,
+    "port_mdd": -13.6,
+    "port_trades": 91,
+    "exits": {
+     "sl": 210,
+     "time": 59,
+     "tp": 10
+    }
+   },
+   "4h|X2|A": {
+    "n": 42,
+    "syms": 40,
+    "win": 0.286,
+    "avg": -1.26,
+    "med": -0.45,
+    "PF": 0.63,
+    "sum": -52.9,
+    "port_ret": -5.2,
+    "port_mdd": -8.9,
+    "port_trades": 42,
+    "exits": {
+     "sl": 17,
+     "time": 16,
+     "trail": 9
+    }
+   },
+   "4h|X2|A|BTC>SMA20": {
+    "n": 12,
+    "syms": 12,
+    "win": 0.25,
+    "avg": -1.9,
+    "med": -4.29,
+    "PF": 0.51,
+    "sum": -22.8,
+    "port_ret": -2.3,
+    "port_mdd": -3.9,
+    "port_trades": 12,
+    "exits": {
+     "sl": 6,
+     "time": 3,
+     "trail": 3
+    }
+   },
+   "4h|X2|B": {
+    "n": 553,
+    "syms": 258,
+    "win": 0.215,
+    "avg": -3.17,
+    "med": -6.91,
+    "PF": 0.35,
+    "sum": -1752.1,
+    "port_ret": -21.1,
+    "port_mdd": -28.3,
+    "port_trades": 240,
+    "exits": {
+     "sl": 333,
+     "time": 154,
+     "trail": 66
+    }
+   },
+   "4h|X2|B|BTC>SMA20": {
+    "n": 279,
+    "syms": 200,
+    "win": 0.136,
+    "avg": -4.71,
+    "med": -7.86,
+    "PF": 0.19,
+    "sum": -1314.8,
+    "port_ret": -14.2,
+    "port_mdd": -17.1,
+    "port_trades": 94,
+    "exits": {
+     "sl": 199,
+     "time": 48,
+     "trail": 32
+    }
+   },
+   "mtf|X1|A": {
+    "n": 102,
+    "syms": 81,
+    "win": 0.167,
+    "avg": -2.31,
+    "med": -3.95,
+    "PF": 0.4,
+    "sum": -236.1,
+    "port_ret": -18.8,
+    "port_mdd": -21.3,
+    "port_trades": 94,
+    "exits": {
+     "sl": 82,
+     "time": 12,
+     "tp": 8
+    }
+   },
+   "mtf|X1|A|BTC>SMA20": {
+    "n": 29,
+    "syms": 25,
+    "win": 0.172,
+    "avg": -1.94,
+    "med": -4.45,
+    "PF": 0.53,
+    "sum": -56.2,
+    "port_ret": -5.6,
+    "port_mdd": -10.0,
+    "port_trades": 29,
+    "exits": {
+     "sl": 23,
+     "tp": 4,
+     "time": 2
+    }
+   },
+   "mtf|X1|B": {
+    "n": 1229,
+    "syms": 298,
+    "win": 0.273,
+    "avg": -1.18,
+    "med": -3.36,
+    "PF": 0.64,
+    "sum": -1446.0,
+    "port_ret": -34.4,
+    "port_mdd": -45.0,
+    "port_trades": 415,
+    "exits": {
+     "sl": 811,
+     "time": 321,
+     "tp": 97
+    }
+   },
+   "mtf|X1|B|BTC>SMA20": {
+    "n": 440,
+    "syms": 232,
+    "win": 0.193,
+    "avg": -2.21,
+    "med": -4.18,
+    "PF": 0.43,
+    "sum": -971.3,
+    "port_ret": -0.2,
+    "port_mdd": -19.7,
+    "port_trades": 154,
+    "exits": {
+     "sl": 306,
+     "time": 95,
+     "tp": 39
+    }
+   },
+   "mtf|X2|A": {
+    "n": 102,
+    "syms": 81,
+    "win": 0.059,
+    "avg": -2.5,
+    "med": -3.2,
+    "PF": 0.2,
+    "sum": -255.0,
+    "port_ret": -21.0,
+    "port_mdd": -21.4,
+    "port_trades": 95,
+    "exits": {
+     "sl": 64,
+     "trail": 31,
+     "time": 7
+    }
+   },
+   "mtf|X2|A|BTC>SMA20": {
+    "n": 29,
+    "syms": 25,
+    "win": 0.069,
+    "avg": -2.37,
+    "med": -3.2,
+    "PF": 0.26,
+    "sum": -68.8,
+    "port_ret": -6.7,
+    "port_mdd": -8.1,
+    "port_trades": 29,
+    "exits": {
+     "sl": 17,
+     "trail": 10,
+     "time": 2
+    }
+   },
+   "mtf|X2|B": {
+    "n": 1229,
+    "syms": 298,
+    "win": 0.199,
+    "avg": -0.99,
+    "med": -3.2,
+    "PF": 0.64,
+    "sum": -1212.5,
+    "port_ret": -29.6,
+    "port_mdd": -39.4,
+    "port_trades": 424,
+    "exits": {
+     "sl": 660,
+     "trail": 313,
+     "time": 255,
+     "eod": 1
+    }
+   },
+   "mtf|X2|B|BTC>SMA20": {
+    "n": 440,
+    "syms": 232,
+    "win": 0.123,
+    "avg": -2.05,
+    "med": -3.7,
+    "PF": 0.38,
+    "sum": -900.2,
+    "port_ret": -4.8,
+    "port_mdd": -14.7,
+    "port_trades": 156,
+    "exits": {
+     "sl": 259,
+     "trail": 117,
+     "time": 63,
+     "eod": 1
+    }
+   }
+  }
+ },
+ "4_1_range": {
+  "name": "횡보장 1 (2023)",
+  "start": "2023-03-20",
+  "end": "2023-10-15",
+  "btc_buy_hold": -2.4,
+  "variants": {
+   "4h|X1|A": {
+    "n": 81,
+    "syms": 73,
+    "win": 0.173,
+    "avg": -3.52,
+    "med": -5.3,
+    "PF": 0.27,
+    "sum": -285.1,
+    "port_ret": -5.8,
+    "port_mdd": -7.1,
+    "port_trades": 38,
+    "exits": {
+     "sl": 57,
+     "time": 21,
+     "tp": 3
+    }
+   },
+   "4h|X1|A|BTC>SMA20": {
+    "n": 12,
+    "syms": 12,
+    "win": 0.417,
+    "avg": 0.47,
+    "med": -2.47,
+    "PF": 1.14,
+    "sum": 5.7,
+    "port_ret": 0.5,
+    "port_mdd": -1.4,
+    "port_trades": 12,
+    "exits": {
+     "sl": 6,
+     "time": 4,
+     "tp": 2
+    }
+   },
+   "4h|X1|B": {
+    "n": 306,
+    "syms": 157,
+    "win": 0.235,
+    "avg": -3.16,
+    "med": -5.27,
+    "PF": 0.31,
+    "sum": -967.2,
+    "port_ret": -23.0,
+    "port_mdd": -24.2,
+    "port_trades": 168,
+    "exits": {
+     "sl": 190,
+     "time": 108,
+     "tp": 8
+    }
+   },
+   "4h|X1|B|BTC>SMA20": {
+    "n": 51,
+    "syms": 41,
+    "win": 0.373,
+    "avg": -1.52,
+    "med": -2.54,
+    "PF": 0.59,
+    "sum": -77.7,
+    "port_ret": -7.7,
+    "port_mdd": -7.7,
+    "port_trades": 51,
+    "exits": {
+     "time": 24,
+     "sl": 24,
+     "tp": 3
+    }
+   },
+   "4h|X2|A": {
+    "n": 81,
+    "syms": 73,
+    "win": 0.136,
+    "avg": -3.6,
+    "med": -5.3,
+    "PF": 0.21,
+    "sum": -291.7,
+    "port_ret": -6.1,
+    "port_mdd": -6.9,
+    "port_trades": 38,
+    "exits": {
+     "sl": 52,
+     "time": 18,
+     "trail": 11
+    }
+   },
+   "4h|X2|A|BTC>SMA20": {
+    "n": 12,
+    "syms": 12,
+    "win": 0.333,
+    "avg": -0.38,
+    "med": -2.47,
+    "PF": 0.89,
+    "sum": -4.6,
+    "port_ret": -0.5,
+    "port_mdd": -1.4,
+    "port_trades": 12,
+    "exits": {
+     "sl": 6,
+     "time": 4,
+     "trail": 2
+    }
+   },
+   "4h|X2|B": {
+    "n": 306,
+    "syms": 157,
+    "win": 0.203,
+    "avg": -3.04,
+    "med": -5.23,
+    "PF": 0.31,
+    "sum": -929.2,
+    "port_ret": -20.2,
+    "port_mdd": -22.9,
+    "port_trades": 167,
+    "exits": {
+     "sl": 180,
+     "time": 89,
+     "trail": 37
+    }
+   },
+   "4h|X2|B|BTC>SMA20": {
+    "n": 51,
+    "syms": 41,
+    "win": 0.294,
+    "avg": -1.62,
+    "med": -1.74,
+    "PF": 0.53,
+    "sum": -82.6,
+    "port_ret": -8.1,
+    "port_mdd": -8.9,
+    "port_trades": 51,
+    "exits": {
+     "sl": 23,
+     "time": 17,
+     "trail": 11
+    }
+   },
+   "mtf|X1|A": {
+    "n": 110,
+    "syms": 85,
+    "win": 0.236,
+    "avg": -1.65,
+    "med": -3.2,
+    "PF": 0.47,
+    "sum": -181.4,
+    "port_ret": -5.7,
+    "port_mdd": -8.5,
+    "port_trades": 76,
+    "exits": {
+     "sl": 82,
+     "time": 21,
+     "tp": 7
+    }
+   },
+   "mtf|X1|A|BTC>SMA20": {
+    "n": 23,
+    "syms": 18,
+    "win": 0.435,
+    "avg": 0.84,
+    "med": -3.2,
+    "PF": 1.39,
+    "sum": 19.3,
+    "port_ret": 1.8,
+    "port_mdd": -1.9,
+    "port_trades": 23,
+    "exits": {
+     "sl": 13,
+     "time": 6,
+     "tp": 4
+    }
+   },
+   "mtf|X1|B": {
+    "n": 561,
+    "syms": 174,
+    "win": 0.291,
+    "avg": -1.43,
+    "med": -3.27,
+    "PF": 0.52,
+    "sum": -805.0,
+    "port_ret": -21.3,
+    "port_mdd": -24.8,
+    "port_trades": 280,
+    "exits": {
+     "sl": 371,
+     "time": 148,
+     "tp": 42
+    }
+   },
+   "mtf|X1|B|BTC>SMA20": {
+    "n": 92,
+    "syms": 61,
+    "win": 0.37,
+    "avg": -0.25,
+    "med": -3.2,
+    "PF": 0.9,
+    "sum": -23.0,
+    "port_ret": -5.1,
+    "port_mdd": -9.1,
+    "port_trades": 85,
+    "exits": {
+     "sl": 54,
+     "time": 24,
+     "tp": 14
+    }
+   },
+   "mtf|X2|A": {
+    "n": 110,
+    "syms": 85,
+    "win": 0.091,
+    "avg": -1.5,
+    "med": -3.2,
+    "PF": 0.37,
+    "sum": -165.1,
+    "port_ret": -6.7,
+    "port_mdd": -9.4,
+    "port_trades": 75,
+    "exits": {
+     "sl": 59,
+     "trail": 43,
+     "time": 8
+    }
+   },
+   "mtf|X2|A|BTC>SMA20": {
+    "n": 23,
+    "syms": 18,
+    "win": 0.217,
+    "avg": 0.57,
+    "med": -0.2,
+    "PF": 1.31,
+    "sum": 13.0,
+    "port_ret": 1.2,
+    "port_mdd": -1.9,
+    "port_trades": 23,
+    "exits": {
+     "sl": 10,
+     "trail": 9,
+     "time": 4
+    }
+   },
+   "mtf|X2|B": {
+    "n": 561,
+    "syms": 174,
+    "win": 0.18,
+    "avg": -1.36,
+    "med": -3.2,
+    "PF": 0.43,
+    "sum": -765.7,
+    "port_ret": -21.1,
+    "port_mdd": -22.6,
+    "port_trades": 286,
+    "exits": {
+     "sl": 287,
+     "trail": 162,
+     "time": 112
+    }
+   },
+   "mtf|X2|B|BTC>SMA20": {
+    "n": 92,
+    "syms": 61,
+    "win": 0.207,
+    "avg": -0.55,
+    "med": -2.32,
+    "PF": 0.76,
+    "sum": -50.3,
+    "port_ret": -6.7,
+    "port_mdd": -9.5,
+    "port_trades": 85,
+    "exits": {
+     "sl": 45,
+     "trail": 30,
+     "time": 17
+    }
+   }
+  }
+ },
+ "4_2_range": {
+  "name": "횡보장 2 (2026, 최근 가격대)",
+  "start": "2026-02-06",
+  "end": "2026-05-31",
+  "btc_buy_hold": 16.1,
+  "variants": {
+   "4h|X1|A": {
+    "n": 102,
+    "syms": 88,
+    "win": 0.363,
+    "avg": 0.35,
+    "med": -5.84,
+    "PF": 1.08,
+    "sum": 36.1,
+    "port_ret": 2.8,
+    "port_mdd": -10.9,
+    "port_trades": 102,
+    "exits": {
+     "sl": 54,
+     "time": 32,
+     "tp": 16
+    }
+   },
+   "4h|X1|A|BTC>SMA20": {
+    "n": 33,
+    "syms": 31,
+    "win": 0.545,
+    "avg": 4.69,
+    "med": 1.54,
+    "PF": 2.45,
+    "sum": 154.6,
+    "port_ret": 16.4,
+    "port_mdd": -4.3,
+    "port_trades": 33,
+    "exits": {
+     "time": 12,
+     "sl": 12,
+     "tp": 9
+    }
+   },
+   "4h|X1|B": {
+    "n": 540,
+    "syms": 304,
+    "win": 0.372,
+    "avg": 0.69,
+    "med": -4.15,
+    "PF": 1.17,
+    "sum": 373.6,
+    "port_ret": 33.1,
+    "port_mdd": -12.7,
+    "port_trades": 353,
+    "exits": {
+     "sl": 260,
+     "time": 193,
+     "tp": 87
+    }
+   },
+   "4h|X1|B|BTC>SMA20": {
+    "n": 137,
+    "syms": 106,
+    "win": 0.365,
+    "avg": 1.06,
+    "med": -6.44,
+    "PF": 1.24,
+    "sum": 144.6,
+    "port_ret": 12.9,
+    "port_mdd": -15.4,
+    "port_trades": 137,
+    "exits": {
+     "sl": 74,
+     "time": 36,
+     "tp": 27
+    }
+   },
+   "4h|X2|A": {
+    "n": 102,
+    "syms": 88,
+    "win": 0.363,
+    "avg": 0.73,
+    "med": -0.2,
+    "PF": 1.23,
+    "sum": 74.7,
+    "port_ret": 7.3,
+    "port_mdd": -6.6,
+    "port_trades": 102,
+    "exits": {
+     "trail": 43,
+     "sl": 41,
+     "time": 18
+    }
+   },
+   "4h|X2|A|BTC>SMA20": {
+    "n": 33,
+    "syms": 31,
+    "win": 0.515,
+    "avg": 3.33,
+    "med": 1.43,
+    "PF": 2.39,
+    "sum": 109.8,
+    "port_ret": 11.4,
+    "port_mdd": -1.6,
+    "port_trades": 33,
+    "exits": {
+     "trail": 17,
+     "sl": 9,
+     "time": 7
+    }
+   },
+   "4h|X2|B": {
+    "n": 540,
+    "syms": 304,
+    "win": 0.331,
+    "avg": 0.4,
+    "med": -0.2,
+    "PF": 1.13,
+    "sum": 213.9,
+    "port_ret": 17.2,
+    "port_mdd": -14.5,
+    "port_trades": 381,
+    "exits": {
+     "trail": 216,
+     "sl": 196,
+     "time": 128
+    }
+   },
+   "4h|X2|B|BTC>SMA20": {
+    "n": 137,
+    "syms": 106,
+    "win": 0.336,
+    "avg": 0.45,
+    "med": -0.2,
+    "PF": 1.13,
+    "sum": 61.2,
+    "port_ret": 5.2,
+    "port_mdd": -12.3,
+    "port_trades": 137,
+    "exits": {
+     "sl": 59,
+     "trail": 52,
+     "time": 26
+    }
+   },
+   "mtf|X1|A": {
+    "n": 199,
+    "syms": 131,
+    "win": 0.266,
+    "avg": -0.51,
+    "med": -3.96,
+    "PF": 0.86,
+    "sum": -101.2,
+    "port_ret": -7.4,
+    "port_mdd": -17.6,
+    "port_trades": 191,
+    "exits": {
+     "sl": 126,
+     "time": 39,
+     "tp": 33,
+     "eod": 1
+    }
+   },
+   "mtf|X1|A|BTC>SMA20": {
+    "n": 67,
+    "syms": 54,
+    "win": 0.328,
+    "avg": 0.71,
+    "med": -3.2,
+    "PF": 1.22,
+    "sum": 47.5,
+    "port_ret": 4.6,
+    "port_mdd": -2.8,
+    "port_trades": 67,
+    "exits": {
+     "sl": 38,
+     "tp": 14,
+     "time": 14,
+     "eod": 1
+    }
+   },
+   "mtf|X1|B": {
+    "n": 1021,
+    "syms": 368,
+    "win": 0.319,
+    "avg": 0.07,
+    "med": -3.36,
+    "PF": 1.02,
+    "sum": 71.6,
+    "port_ret": -8.4,
+    "port_mdd": -24.6,
+    "port_trades": 543,
+    "exits": {
+     "sl": 621,
+     "time": 213,
+     "tp": 185,
+     "eod": 2
+    }
+   },
+   "mtf|X1|B|BTC>SMA20": {
+    "n": 265,
+    "syms": 166,
+    "win": 0.328,
+    "avg": -0.01,
+    "med": -3.48,
+    "PF": 1.0,
+    "sum": -2.7,
+    "port_ret": -7.6,
+    "port_mdd": -11.9,
+    "port_trades": 239,
+    "exits": {
+     "sl": 156,
+     "time": 61,
+     "tp": 46,
+     "eod": 2
+    }
+   },
+   "mtf|X2|A": {
+    "n": 199,
+    "syms": 131,
+    "win": 0.201,
+    "avg": -0.25,
+    "med": -0.29,
+    "PF": 0.9,
+    "sum": -50.6,
+    "port_ret": -4.3,
+    "port_mdd": -12.4,
+    "port_trades": 194,
+    "exits": {
+     "sl": 92,
+     "trail": 84,
+     "time": 23
+    }
+   },
+   "mtf|X2|A|BTC>SMA20": {
+    "n": 67,
+    "syms": 54,
+    "win": 0.224,
+    "avg": 0.53,
+    "med": -0.49,
+    "PF": 1.21,
+    "sum": 35.2,
+    "port_ret": 3.4,
+    "port_mdd": -3.5,
+    "port_trades": 67,
+    "exits": {
+     "sl": 30,
+     "trail": 28,
+     "time": 9
+    }
+   },
+   "mtf|X2|B": {
+    "n": 1021,
+    "syms": 368,
+    "win": 0.214,
+    "avg": -0.0,
+    "med": -0.2,
+    "PF": 1.0,
+    "sum": -2.4,
+    "port_ret": -18.5,
+    "port_mdd": -27.1,
+    "port_trades": 583,
+    "exits": {
+     "sl": 458,
+     "trail": 417,
+     "time": 146
+    }
+   },
+   "mtf|X2|B|BTC>SMA20": {
+    "n": 265,
+    "syms": 166,
+    "win": 0.215,
+    "avg": -0.1,
+    "med": -0.2,
+    "PF": 0.96,
+    "sum": -26.0,
+    "port_ret": -5.8,
+    "port_mdd": -10.5,
+    "port_trades": 242,
+    "exits": {
+     "sl": 115,
+     "trail": 111,
+     "time": 39
+    }
+   }
+  }
+ }
+}
