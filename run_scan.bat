@@ -1,9 +1,11 @@
 @echo off
-REM 급등 패턴 스캔 + 횡보 후 거래량 증가 스캔 (Windows). 바이낸스 공개 API 사용, 키 불필요.
-REM 예) run_scan.bat --top 5 --pick 20      run_scan.bat --mode range --range-hours 48 --vol-mult 1.5
+chcp 65001 >nul
+set PYTHONUTF8=1
+REM 급등 패턴 + 횡보 후 거래량 증가 스캔. 예) run_scan.bat --mode range --range-hours 48 --vol-mult 1.5
 cd /d %~dp0
-python -m pip install -q -r requirements.txt
-python analyzer\pattern_scan.py %*
-echo.
-echo 결과: analyzer\out\scan_*.md, analyzer\out\range_*.md   패턴 기록: analyzer\patterns\
+call scripts\find_python.bat || (pause & exit /b 1)
+echo 파이썬: %PY%
+%PY% -m pip install -q -r requirements.txt || (echo [오류] 패키지 설치 실패 & pause & exit /b 1)
+%PY% analyzer\pattern_scan.py %*
+echo 결과: analyzer\out\   패턴 기록: analyzer\patterns\
 pause

@@ -28,6 +28,10 @@ python analyzer/pattern_scan.py --mode range --range-hours 48 --vol-mult 1.5
 
 ### 웹 대시보드 (localhost)
 
+> 실행 전 Python 3.9 이상 필요 (https://www.python.org/downloads/ , 설치 시 "Add python.exe to PATH" 체크).
+> `run_*.bat` 이 "Python" 만 찍고 끝나면 Microsoft Store 가짜 python 이 잡힌 것 → 파이썬 설치 후
+> 설정 > 앱 > 고급 앱 설정 > 앱 실행 별칭 에서 python.exe / python3.exe 별칭을 끄세요.
+
 Windows: `run_web.bat` 더블클릭 → 브라우저에서 **http://localhost:8000** 이 열립니다. (직접 실행: `python analyzer/web.py`)
 
 - 화면에서 방식·상위 종목 수·횡보 구간·거래량 배수 등을 정하고 **스캔 실행** (실행 로그 실시간 표시, 15/30/60분 자동 반복 가능)
