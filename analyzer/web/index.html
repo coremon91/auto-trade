@@ -354,7 +354,7 @@ function setCB(v) { CB = v; CMP = null; try { localStorage.setItem("cb2", v); } 
 
 function viewCompare() {
   if (!CMP) { fetch(`/api/compare?group=${CG}&btc=${CB}`).then(r => r.json()).then(d => { CMP = d; render(); }).catch(e => { CMP = errObj(e); render(); }); return `<div class="panel empty">불러오는 중…</div>`; }
-  if (!SIGS) { fetch(`/api/signals?group=${CG}&limit=400`).then(r => r.json()).then(d => { SIGS = d; render(); }).catch(e => { SIGS = errObj(e); render(); }); }
+  if (!SIGS) { fetch(`/api/signals?group=${CG}&limit=100`).then(r => r.json()).then(d => { SIGS = d; render(); }).catch(e => { SIGS = errObj(e); render(); }); }
   const head = `<div class="row" style="margin-bottom:12px">
       ${seg("g", CG, [["backfill", "과거 채움 (아카이브)"], ["api", "실시간 기록 (API)"]], "setCG")}
       ${seg("b", CB, [["1", "BTC 20일선 위일 때만 (기본)"], ["0", "모든 신호"]], "setCB")}</div>`;
