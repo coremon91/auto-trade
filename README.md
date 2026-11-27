@@ -2,6 +2,30 @@
 
 바이낸스 USDT-M 무기한 선물 알트코인 롱 전략 연구/백테스트.
 
+## 급등 패턴 스캐너 (analyzer/pattern_scan.py)
+
+바이낸스 공개 API 로 지금 시장을 스캔합니다 (API 키 불필요). Windows: `run_scan.bat`
+
+**방식 1 — 급등 패턴 유사도** (`--mode pattern`)
+1. 24h 상승률 상위 5개 종목 선정 (주식/ETF/원자재/법정화폐·스테이블 선물 제외, 24h 거래대금 $2M 이상)
+2. 각 종목의 마지막 상승 구간 시작점(launch)을 찾고, 그 **직전까지** 4h 42봉 · 1h 48봉 · 15m 48봉 차트와 특징값
+   (7일/24h 수익률, 30일 고점 대비, RSI, ATR%, BB폭 순위, 거래량 배수, 펀딩, OI 24h 변화)을 기록
+   → `analyzer/patterns/library.jsonl` 누적 + 차트 PNG
+3. 나머지 코인의 지금 차트와 비교해 유사도 순위 → `analyzer/out/scan_*.md / .csv / PNG`
+   (`--library` 를 주면 그동안 쌓인 패턴 전체와 비교)
+
+**방식 2 — 횡보 후 거래량 증가** (`--mode range`)
+1. 최근 4h 를 뺀 이전 24h 가 박스권인 코인: 고저폭 3% 이내 / 5% 이내 두 단계
+2. 그중 최근 4h 평균 거래량이 박스 구간 평균의 2배 이상인 코인 → `analyzer/out/range_*.md / .csv`
+   (박스 상단 돌파 / 박스 안 / 하단 이탈 표시)
+
+기본값은 두 방식 모두 실행. 주요 옵션: `--top 5 --pick 20 --lookback 72 --range-hours 24 --recent 4 --vol-mult 2`
+
+```
+python analyzer/pattern_scan.py
+python analyzer/pattern_scan.py --mode range --range-hours 48 --vol-mult 1.5
+```
+
 ## 국면별 백테스트 (프로그램)
 
 BTC 시장 국면 5구간(`scripts/periods.py`)마다 같은 전략을 돌려 비교합니다.
