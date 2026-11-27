@@ -156,8 +156,8 @@ const money = v => v == null ? "–" : "$" + (v / 1e6).toFixed(1) + "M";
 let RUN = null, TAB = "compare", LIB = null, BT = null, CMP = null, SIGS = null, MSIG = {}, PAPER = null;
 let PAMT = 100, PDAYS = "0", PB = "1";
 try { PAMT = +(localStorage.getItem("pamt") || 100); PDAYS = localStorage.getItem("pdays") || "0"; PB = localStorage.getItem("pb") || "1"; } catch (e) {}
-let CG = "backfill", CB = "0";
-try { CG = localStorage.getItem("cg") || CG; CB = localStorage.getItem("cb") || CB; } catch (e) {}
+let CG = "backfill", CB = "1";   // 기본: BTC 20일선 위일 때만
+try { CG = localStorage.getItem("cg") || CG; CB = localStorage.getItem("cb2") || CB; } catch (e) {}
 
 // theme
 try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
@@ -350,14 +350,14 @@ function seg(name, val, opts, cb) {
   return `<span class="seg">${opts.map(([v, l]) => `<button class="${v === val ? "on" : ""}" onclick="${cb}('${v}')">${l}</button>`).join("")}</span>`;
 }
 function setCG(v) { CG = v; CMP = null; SIGS = null; MSIG = {}; PAPER = null; try { localStorage.setItem("cg", v); } catch (e) {} render(); }
-function setCB(v) { CB = v; CMP = null; try { localStorage.setItem("cb", v); } catch (e) {} render(); }
+function setCB(v) { CB = v; CMP = null; try { localStorage.setItem("cb2", v); } catch (e) {} render(); }
 
 function viewCompare() {
   if (!CMP) { fetch(`/api/compare?group=${CG}&btc=${CB}`).then(r => r.json()).then(d => { CMP = d; render(); }).catch(e => { CMP = errObj(e); render(); }); return `<div class="panel empty">불러오는 중…</div>`; }
   if (!SIGS) { fetch(`/api/signals?group=${CG}&limit=400`).then(r => r.json()).then(d => { SIGS = d; render(); }).catch(e => { SIGS = errObj(e); render(); }); }
   const head = `<div class="row" style="margin-bottom:12px">
       ${seg("g", CG, [["backfill", "과거 채움 (아카이브)"], ["api", "실시간 기록 (API)"]], "setCG")}
-      ${seg("b", CB, [["0", "전체"], ["1", "BTC 20일선 위일 때만"]], "setCB")}</div>`;
+      ${seg("b", CB, [["1", "BTC 20일선 위일 때만 (기본)"], ["0", "모든 신호"]], "setCB")}</div>`;
   if (!CMP.info) return head + `<div class="panel empty">${CG === "api" ? "아직 실시간 기록이 없습니다. 스캔을 실행하면 신호가 쌓이고, 4h·24h·72h 뒤 성과가 자동 계산됩니다."
       : "과거 채움 데이터가 없습니다. 명령 프롬프트에서 <code>python analyzer\\tracker.py backfill --days 60</code> 실행."}</div>`;
   const I = CMP.info, R = CMP.rows, main = R.filter(r => !r.sub);
@@ -444,7 +444,7 @@ function viewMethod(m) {
   const head = `<section class="panel"><h2><span class="dot" style="background:${MCOLOR[m]}"></span>${m} ${title}</h2>
       <p style="margin:0 0 10px">${rule}</p>
       <div class="row">${seg("g", CG, [["backfill", "과거 채움"], ["api", "실시간 기록"]], "setCG")}
-      ${seg("b", CB, [["0", "전체"], ["1", "BTC 20일선 위일 때만"]], "setCB")}</div></section>` +
+      ${seg("b", CB, [["1", "BTC 20일선 위일 때만 (기본)"], ["0", "모든 신호"]], "setCB")}</div></section>` +
     (st ? stats([[st.n, "누적 신호"], [pct(st.r72, 2), "72h 평균 수익률"], [st.win72 == null ? "–" : (st.win72 * 100).toFixed(0) + "%", "72h 승률"],
                  [pct(st.trade, 2), "거래 평균 (손절/익절 규칙)"], [st.hit30 == null ? "–" : (st.hit30 * 100).toFixed(1) + "%", "+30% 도달"],
                  [pct(st.excess72, 2), `무작위 대비 (기준선 ${pct(base?.r72, 2)})`]]) : "");
@@ -454,7 +454,8 @@ function viewMethod(m) {
       <div class="meta"><h3><span class="chip">#${s.rank ?? ""}</span> ${esc(s.symbol)} ${s.sub ? `<span class="chip">${esc(s.sub)}</span>` : ""}</h3>
       <div class="muted" style="margin-bottom:6px">선정 가격 ${s.price}</div>${detailKV(m, {...s.detail, score: s.score})}</div></div>`).join("")}</div>`
     : `<div class="empty">${RUN ? "이번 스캔에서 조건에 맞는 종목이 없습니다." : "아직 스캔 기록이 없습니다."}</div>`;
-  const pickSec = `<section class="panel"><h2>이번 스캔 선정 종목 <span class="muted" style="font-weight:400">${RUN ? RUN.time?.slice(0, 16) + " UTC · " + (RUN.source === "api" ? "실시간" : "아카이브") : ""}</span></h2>${cards}</section>`;
+  const gated = RUN && RUN.btc_ok === false;
+  const pickSec = `<section class="panel"><h2>${gated ? `<span class="chip warn">관찰만 · BTC 필터 미통과</span> ` : `<span class="chip go">진입 가능</span> `}이번 스캔 선정 종목 <span class="muted" style="font-weight:400">${RUN ? RUN.time?.slice(0, 16) + " UTC · " + (RUN.source === "api" ? "실시간" : "아카이브") : ""}</span></h2>${cards}</section>`;
   const extra = m === "M1" && RUN?.patterns?.length ? viewPattern() : m === "M2" && RUN?.range ? viewRange() : "";
   let hist = `<section class="panel"><h2>선정 기록과 결과</h2><div class="empty">불러오는 중…</div></section>`;
   if (MSIG[m]) {
