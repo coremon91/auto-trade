@@ -278,11 +278,18 @@ def pump_pattern(src, sym, k1, lookback, frac=0.25, min_gain=0.15):
     """급등 종목의 launch 직전 스냅샷. 1차 launch(마지막 상승 구간 시작)가 이미 상승 중이면
     저점 봉으로 되돌려 다시 시도, 그래도 아니면 None. 반환 (snap, launch, peak, gain, gain_from_low)."""
     tl, tp, gain, gl = find_launch(k1, lookback, frac)
-    tries = [(tl, gain)]
     w = k1.iloc[-lookback:]
+    # launch 가 탐색 구간 맨 앞(3봉 이내)이면 진짜 저점이 구간 밖일 수 있음 → 같은 고점 기준으로 구간을 2배까지 늘려 다시 찾음
+    if w.index.get_loc(tl) < 3 and len(k1) >= 2 * lookback:
+        ip_all = k1.index.get_loc(tp)
+        tl2, tp2, g2, gl2 = find_launch(k1.iloc[: ip_all + 1], min(ip_all + 1, lookback * 2), frac)
+        if tp2 == tp:
+            tl, gain, gl = tl2, g2, max(gl, gl2)
+            w = k1.iloc[max(0, ip_all + 1 - lookback * 2): ip_all + 1]
+    tries = [(tl, gain)]
     ip = int(np.argmax(w.h.values))
     il = int(np.argmin(w.l.values[: ip + 1]))
-    if w.index[il] != tl:
+    if w.index[il] != tl and w.index[il] < tp:
         tries.append((w.index[il], gl))
     for t, g in tries:
         if t >= tp or g < min_gain:

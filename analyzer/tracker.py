@@ -75,8 +75,8 @@ def record(con, source, t, sigs):
     n = 0
     for s in sigs:
         q = f"SELECT 1 FROM signals WHERE method=? AND symbol=? AND scan_t>? AND scan_t<? AND source IN ({','.join('?' * len(g))})"
-        if con.execute(q, (s["method"], s["symbol"], lo, ts, *g)).fetchone():
-            continue
+        if s["method"] != "M0" and con.execute(q, (s["method"], s["symbol"], lo, ts, *g)).fetchone():
+            continue      # 같은 방식·종목 24h 중복 제외 (M0 무작위 기준선은 표본이 줄지 않게 제외 안 함)
         cur = con.execute("INSERT OR IGNORE INTO signals(source,scan_t,method,sub,symbol,price,score,btc_ok,detail,rank,png,status,last_price,last_t)"
                           " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                           (source, ts, s["method"], s.get("sub", ""), s["symbol"], float(s["price"]),
@@ -211,8 +211,27 @@ def m6(snaps, btc, m6_ok):
     return sorted(out, key=lambda x: -x["score"])[:CAP]
 
 
+def prune_library(lib, say=print):
+    """예전 버전이 잘못 잡은 패턴(이미 상승 중, launch=peak)을 library_rejected.jsonl 로 옮김."""
+    if not os.path.exists(lib):
+        return
+    keep, bad = [], []
+    for line in open(lib, encoding="utf-8"):
+        try:
+            p = json.loads(line)
+        except Exception:
+            continue
+        (keep if ps.clean_pre(p.get("feat", {}), p.get("launch", ""), p.get("peak", "")) else bad).append(line.rstrip("\n"))
+    if bad:
+        with open(os.path.join(os.path.dirname(lib), "library_rejected.jsonl"), "a", encoding="utf-8") as fh:
+            fh.write("\n".join(bad) + "\n")
+        with open(lib, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(keep) + ("\n" if keep else ""))
+        say(f"  패턴 라이브러리 정리: 상승 직전이 아닌 패턴 {len(bad)}개를 library_rejected.jsonl 로 이동")
+
+
 def m0(snaps, t):
-    rnd = random.Random(int(pd.Timestamp(t).value // 3_600_000_000_000))
+    rnd = random.Random(int(pd.Timestamp(t).value) ^ (os.getpid() if not getattr(m0, "reproducible", False) else 0))
     pick = rnd.sample(snaps, min(CAP, len(snaps)))
     return [sig("M0", s, None) for s in pick]
 
@@ -258,6 +277,7 @@ def run_scan(src, a, source, charts=True, quiet=False, report=True):
     if source != "backfill":
         lib = os.path.join(ps.PAT_DIR, "library.jsonl")
         os.makedirs(ps.PAT_DIR, exist_ok=True)
+        prune_library(lib, say)
         seen = {(p["symbol"], p["launch"]) for p in map(json.loads, open(lib, encoding="utf-8"))} if os.path.exists(lib) else set()
         with open(lib, "a", encoding="utf-8") as fh:
             for p in patterns:
@@ -362,13 +382,30 @@ def outcome(k, p0):
     return res
 
 
+def _refresh_prices(con, src, now):
+    """실시간: 아직 열린 포지션은 바이낸스 현재가(티커)로 평가."""
+    if not hasattr(src, "prices") or not isinstance(src, ps.BinanceAPI):
+        return 0
+    px = src.prices()
+    n = 0
+    for i, sym in con.execute("SELECT id, symbol FROM signals WHERE (status IS NULL OR status='open') AND source='api'").fetchall():
+        if sym in px:
+            con.execute("UPDATE signals SET last_price=?, last_t=?, status=COALESCE(status,'open') WHERE id=?", (px[sym], str(now), i))
+            n += 1
+    return n
+
+
 def update(con, src, source):
     g = _grp(source)
     now = pd.Timestamp(src.now(), unit="ms")
     q = (f"SELECT id, symbol, scan_t, price FROM signals WHERE bars < {HOLD} "
          f"AND source IN ({','.join('?' * len(g))}) AND scan_t <= ?")
     rows = pd.DataFrame(con.execute(q, (*g, str(now - pd.Timedelta(hours=1)))).fetchall(), columns=["id", "symbol", "scan_t", "price"])
+    n_px = 0
     if rows.empty:
+        n_px = _refresh_prices(con, src, now)
+        con.commit()
+        print(f"  현재가 갱신 {n_px}건 (1시간봉이 닫힌 신호가 아직 없어 성과 계산은 0건)")
         return 0
     rows["t"] = pd.to_datetime(rows.scan_t)
 
@@ -391,13 +428,9 @@ def update(con, src, source):
                     " last_price=?, last_t=? WHERE id=?",
                     (r["bars"], r["r4"], r["r24"], r["r72"], r["mfe"], r["mae"], r["trade"], r["hit30"], r["status"],
                      r["exit_price"], r["exit_t"], r["last_price"], r["last_t"], i))
-    # 실시간: 아직 열린 포지션은 현재가(티커)로 평가
-    if hasattr(src, "prices"):
-        px = src.prices()
-        for i, sym in con.execute("SELECT id, symbol FROM signals WHERE (status IS NULL OR status='open') AND source='api'").fetchall():
-            if sym in px:
-                con.execute("UPDATE signals SET last_price=?, last_t=?, status=COALESCE(status,'open') WHERE id=?", (px[sym], str(now), i))
+    n_px = _refresh_prices(con, src, now)
     con.commit()
+    print(f"  현재가 갱신 {n_px}건")
     return len(allres)
 
 
@@ -687,6 +720,7 @@ def main():
     elif a.cmd == "update":
         src = ps.BinanceAPI() if a.source == "api" else ps.Archive()
         print(f"성과 갱신 {update(con, src, a.source)}건")
+        prune_library(os.path.join(ps.PAT_DIR, "library.jsonl"))
     elif a.cmd == "export-seed":
         export_seed()
     elif a.cmd == "report":
@@ -696,6 +730,7 @@ def main():
         end = pd.Timestamp(a.end) if a.end else rb_end
         start = end - pd.Timedelta(days=a.days)
         src = Backfill(start, end, workers=max(16, a.workers))
+        m0.reproducible = True
         times = pd.date_range(start, end, freq=f"{a.every}h")
         have = {r[0] for r in con.execute("SELECT DISTINCT scan_t FROM signals WHERE source='backfill'")}
         t0 = time.time()
