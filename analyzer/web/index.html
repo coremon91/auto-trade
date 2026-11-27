@@ -78,6 +78,9 @@ h2 { font-size: 15px; margin: 0 0 10px; }
 .empty { padding: 30px; text-align: center; color: var(--muted); }
 #modal { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
 #modal img { max-width: 100%; max-height: 100%; border-radius: 6px; background: #fff; }
+.chip.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+text.ax { font-size: 11px; fill: var(--muted); }
+.tabs .dot { width: 7px; height: 7px; margin-right: 5px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; border-radius: 0; background: var(--panel); color: var(--muted); padding: 6px 12px; }
 .seg button.on { background: var(--accent); color: var(--accent-ink); }
@@ -128,8 +131,13 @@ h2 { font-size: 15px; margin: 0 0 10px; }
 
   <div class="tabs" id="tabs">
     <button data-t="compare" class="on">6가지 비교</button>
-    <button data-t="pattern">급등 패턴 유사</button>
-    <button data-t="range">횡보 + 거래량</button>
+    <button data-t="M1"><span class="dot" style="background:#2f6fde"></span>M1 급등 차트 유사</button>
+    <button data-t="M2"><span class="dot" style="background:#0f9d8a"></span>M2 횡보+거래량</button>
+    <button data-t="M3"><span class="dot" style="background:#c27c0e"></span>M3 이평선</button>
+    <button data-t="M4"><span class="dot" style="background:#9b5de5"></span>M4 RSI</button>
+    <button data-t="M5"><span class="dot" style="background:#d1495b"></span>M5 펀딩+OI</button>
+    <button data-t="M6"><span class="dot" style="background:#3a86ff"></span>M6 상대강도</button>
+    <button data-t="paper">가상 매매</button>
     <button data-t="library">패턴 기록</button>
     <button data-t="bt">백테스트</button>
   </div>
@@ -145,7 +153,9 @@ const num = (v, d = 2) => v == null ? "–" : Number(v).toFixed(d);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const img = p => { if (!p) return null; const s = p.replace(/\\/g, "/").split("/"); return "/img/" + s[s.length - 2] + "/" + encodeURIComponent(s[s.length - 1]); };
 const money = v => v == null ? "–" : "$" + (v / 1e6).toFixed(1) + "M";
-let RUN = null, TAB = "compare", LIB = null, BT = null, CMP = null, SIGS = null;
+let RUN = null, TAB = "compare", LIB = null, BT = null, CMP = null, SIGS = null, MSIG = {}, PAPER = null;
+let PAMT = 100, PDAYS = "0";
+try { PAMT = +(localStorage.getItem("pamt") || 100); PDAYS = localStorage.getItem("pdays") || "0"; } catch (e) {}
 let CG = "backfill", CB = "0";
 try { CG = localStorage.getItem("cg") || CG; CB = localStorage.getItem("cb") || CB; } catch (e) {}
 
@@ -315,7 +325,7 @@ const MCOLOR = {M0: "#8a94a6", M1: "#2f6fde", M2: "#0f9d8a", M3: "#c27c0e", M4: 
 function seg(name, val, opts, cb) {
   return `<span class="seg">${opts.map(([v, l]) => `<button class="${v === val ? "on" : ""}" onclick="${cb}('${v}')">${l}</button>`).join("")}</span>`;
 }
-function setCG(v) { CG = v; CMP = null; SIGS = null; try { localStorage.setItem("cg", v); } catch (e) {} render(); }
+function setCG(v) { CG = v; CMP = null; SIGS = null; MSIG = {}; PAPER = null; try { localStorage.setItem("cg", v); } catch (e) {} render(); }
 function setCB(v) { CB = v; CMP = null; try { localStorage.setItem("cb", v); } catch (e) {} render(); }
 
 function viewCompare() {
@@ -382,8 +392,143 @@ function viewCompare() {
      MFE/MAE = 72시간 안 최대 상승/최대 하락. 같은 방식·같은 종목은 24시간 안에 다시 기록하지 않음. 신호 수가 적은 방식은 우연일 수 있음.</p></section>` + sigHtml;
 }
 
+const RULES = {
+  M1: ["급등 차트 유사", "24h 상승 상위 5개 종목의 '상승 직전' 차트(4h 42봉 · 1h 48봉 · 15m 48봉)와 특징값을 기록하고, 나머지 코인의 지금 차트와 비교해 가장 닮은 6종목."],
+  M2: ["횡보 + 거래량 증가", "최근 4h 를 뺀 직전 24h 가 박스폭 3% 또는 5% 이내로 횡보했고, 최근 4h 평균 거래량이 박스 구간의 2배 이상인 종목 중 거래량 배수 상위 6개 (박스 하단 이탈 제외)."],
+  M3: ["이평선 골든크로스", "1h EMA20 이 EMA50 을 최근 4시간 안에 위로 돌파했고, 종가가 1h EMA200 위인 종목. EMA200 대비 위에 있는 순으로 6개."],
+  M4: ["RSI 과매도 반등", "1h RSI(14) 가 최근 3봉 안에 30 아래에 있다가 30 위로 회복한 종목. 강세 다이버전스(가격 저점↓, RSI 저점↑) 동반(div)을 우선, 그다음 RSI 가 더 낮았던 순으로 6개."],
+  M5: ["펀딩+OI 숏스퀴즈", "7일 수익률 -15% 이하, 24h -12%~+3%, 펀딩 ≤ 0, 미결제약정(OI) 24h +10% 이상 — 숏이 몰린 하락 코인. OI 증가율 순으로 6개."],
+  M6: ["BTC 대비 상대강도", "BTC 가 7일 고점 대비 -3% 이상 눌렸다가 1h EMA20 위로 회복 중일 때만. 코인/BTC 비율이 7일 고점의 97% 이상이고 7일 수익률이 BTC 보다 10%p 이상 높은 종목, 상대강도 순으로 6개."],
+};
+function detailKV(m, d) {
+  const L = {
+    M1: [["유사도", num(d.score)], ["닮은 패턴", esc(d.like || "")], ["모양", num(d.shape)], ["특징", num(d.feat)], ["상관 4h/1h/15m", `${num(d.corr_4h)}/${num(d.corr_1h)}/${num(d.corr_15m)}`]],
+    M2: [["박스폭", pct(d.range_pct, 2)], ["거래량 배수", num(d.vol_ratio) + "x"], ["최근 가격", pct(d.move_recent)], ["상태", d.breakout ? "상단 돌파" : "박스 안"]],
+    M3: [["EMA200 대비", pct(d.above_ema200)]],
+    M4: [["직전 RSI 최저", num(d.rsi_min, 1)], ["다이버전스", d.div ? "있음" : "없음"]],
+    M5: [["OI 24h", pct(d.oi_chg_24h)], ["펀딩", d.funding == null ? "–" : (d.funding * 100).toFixed(3) + "%"], ["7일", pct(d.ret_7d)]],
+    M6: [["BTC 대비 7일", pct(d.rs7)], ["비율/7일 고점", num(d.ratio_vs_7d_high, 3)]],
+  }[m] || [];
+  return `<div class="kv">${L.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join("")}</div>`;
+}
+
+function viewMethod(m) {
+  if (!CMP) fetch(`/api/compare?group=${CG}&btc=${CB}`).then(r => r.json()).then(d => { CMP = d; render(); });
+  if (!MSIG[m]) fetch(`/api/signals?group=${CG}&method=${m}&limit=300`).then(r => r.json()).then(d => { MSIG[m] = d; render(); });
+  const [title, rule] = RULES[m];
+  const st = CMP?.rows?.find(r => r.method === m && !r.sub), base = CMP?.rows?.find(r => r.method === "M0" && !r.sub);
+  const head = `<section class="panel"><h2><span class="dot" style="background:${MCOLOR[m]}"></span>${m} ${title}</h2>
+      <p style="margin:0 0 10px">${rule}</p>
+      <div class="row">${seg("g", CG, [["backfill", "과거 채움"], ["api", "실시간 기록"]], "setCG")}
+      ${seg("b", CB, [["0", "전체"], ["1", "BTC 20일선 위일 때만"]], "setCB")}</div></section>` +
+    (st ? stats([[st.n, "누적 신호"], [pct(st.r72, 2), "72h 평균 수익률"], [st.win72 == null ? "–" : (st.win72 * 100).toFixed(0) + "%", "72h 승률"],
+                 [pct(st.trade, 2), "거래 평균 (손절/익절 규칙)"], [st.hit30 == null ? "–" : (st.hit30 * 100).toFixed(1) + "%", "+30% 도달"],
+                 [pct(st.excess72, 2), `무작위 대비 (기준선 ${pct(base?.r72, 2)})`]]) : "");
+  const picks = (RUN?.signals || []).filter(s => s.method === m);
+  const cards = picks.length ? `<div class="cards">${picks.map(s => `<div class="card">
+      ${s.png ? `<img src="${img(s.png)}" loading="lazy" onclick="zoom(this.src)">` : ""}
+      <div class="meta"><h3><span class="chip">#${s.rank ?? ""}</span> ${esc(s.symbol)} ${s.sub ? `<span class="chip">${esc(s.sub)}</span>` : ""}</h3>
+      <div class="muted" style="margin-bottom:6px">선정 가격 ${s.price}</div>${detailKV(m, {...s.detail, score: s.score})}</div></div>`).join("")}</div>`
+    : `<div class="empty">${RUN ? "이번 스캔에서 조건에 맞는 종목이 없습니다." : "아직 스캔 기록이 없습니다."}</div>`;
+  const pickSec = `<section class="panel"><h2>이번 스캔 선정 종목 <span class="muted" style="font-weight:400">${RUN ? RUN.time?.slice(0, 16) + " UTC · " + (RUN.source === "api" ? "실시간" : "아카이브") : ""}</span></h2>${cards}</section>`;
+  const extra = m === "M1" && RUN?.patterns?.length ? viewPattern() : m === "M2" && RUN?.range ? viewRange() : "";
+  let hist = `<section class="panel"><h2>선정 기록과 결과</h2><div class="empty">불러오는 중…</div></section>`;
+  if (MSIG[m]) {
+    const cols = [
+      {h: "시각(UTC)", l: 1, v: x => x.scan_t, f: x => x.scan_t.slice(5, 16)},
+      {h: "#", v: x => x.rank, f: x => x.rank ?? ""},
+      {h: "종목", l: 1, v: x => x.symbol, f: x => `<b>${esc(x.symbol)}</b> ${x.sub ? `<span class="muted">${esc(x.sub)}</span>` : ""}`},
+      {h: "BTC필터", v: x => x.btc_ok, f: x => x.btc_ok ? `<span class="chip go">위</span>` : `<span class="chip">아래</span>`},
+      {h: "24h", v: x => x.r24, f: x => pct(x.r24), c: x => cls(x.r24)},
+      {h: "72h", v: x => x.r72, f: x => pct(x.r72), c: x => cls(x.r72)},
+      {h: "최대상승", v: x => x.mfe, f: x => pct(x.mfe), c: () => "up"},
+      {h: "최대하락", v: x => x.mae, f: x => pct(x.mae), c: () => "down"},
+      {h: "결과", v: x => x.trade, f: x => statusChip(x.status) + " " + (x.trade == null ? "" : pct(x.trade)), c: x => cls(x.trade)},
+    ];
+    hist = `<section class="panel"><h2>선정 기록과 결과 (${MSIG[m].length}건)</h2>${table(cols, MSIG[m])}</section>`;
+  }
+  return head + pickSec + extra + hist;
+}
+
+function statusChip(s) {
+  return {tp: `<span class="chip go">익절</span>`, sl: `<span class="chip bad">손절</span>`, time: `<span class="chip">72h 청산</span>`,
+          open: `<span class="chip warn">보유 중</span>`}[s] || `<span class="chip">대기</span>`;
+}
+function setPAMT(v) { PAMT = Math.max(1, +v || 100); PAPER = null; try { localStorage.setItem("pamt", PAMT); } catch (e) {} render(); }
+function setPDAYS(v) { PDAYS = v; PAPER = null; try { localStorage.setItem("pdays", v); } catch (e) {} render(); }
+async function refreshPrices() {
+  const r = await fetch("/api/update", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+  const d = await r.json(); if (!d.ok) alert(d.msg); wasRunning = true; poll();
+}
+const usd = v => v == null ? "–" : (v >= 0 ? "+" : "-") + "$" + Math.abs(v).toFixed(2);
+
+function curveSVG(curve) {
+  const ms = Object.keys(curve); if (!ms.length) return `<div class="empty">청산된 거래가 아직 없습니다.</div>`;
+  const pts = ms.flatMap(m => curve[m]);
+  const ds = [...new Set(pts.map(p => p[0]))].sort(), ix = Object.fromEntries(ds.map((d, i) => [d, i]));
+  const vs = pts.map(p => p[1]), lo = Math.min(0, ...vs), hi = Math.max(0, ...vs);
+  const W = 900, H = 260, P = 44, sx = i => P + (ds.length < 2 ? 0 : i / (ds.length - 1)) * (W - P - 12), sy = v => 12 + (hi - v) / ((hi - lo) || 1) * (H - 36);
+  const ticks = [lo, (lo + hi) / 2, hi].map(v => `<text x="${P - 6}" y="${sy(v) + 4}" text-anchor="end" class="ax">${v >= 0 ? "" : "-"}$${Math.abs(v).toFixed(0)}</text>`).join("");
+  const lines = ms.map(m => `<polyline fill="none" stroke="${MCOLOR[m]}" stroke-width="${m === "M0" ? 1.5 : 2.2}" ${m === "M0" ? 'stroke-dasharray="4 3"' : ""}
+     points="${curve[m].map(p => sx(ix[p[0]]) + "," + sy(p[1])).join(" ")}"><title>${m}</title></polyline>`).join("");
+  const xl = [0, Math.floor((ds.length - 1) / 2), ds.length - 1].filter((v, i, a) => a.indexOf(v) === i)
+    .map(i => `<text x="${sx(i)}" y="${H - 4}" text-anchor="middle" class="ax">${ds[i].slice(5)}</text>`).join("");
+  const legend = ms.map(m => `<span style="margin-right:12px"><span class="dot" style="background:${MCOLOR[m]}"></span>${m}${m === "M0" ? " (기준선)" : ""}</span>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto"><line x1="${P}" x2="${W - 12}" y1="${sy(0)}" y2="${sy(0)}" stroke="var(--line)"/>
+    ${ticks}${xl}${lines}</svg><div style="font-size:12px;margin-top:6px">${legend}</div>`;
+}
+
+function viewPaper() {
+  if (!PAPER) { fetch(`/api/paper?group=${CG}&amount=${PAMT}&days=${PDAYS}`).then(r => r.json()).then(d => { PAPER = d; render(); }); }
+  const head = `<section class="panel"><h2>가상 매매</h2>
+    <p style="margin:0 0 10px">각 방식이 고른 종목을 선정 시점 가격에 <b>$${PAMT}</b>씩 산 것으로 보고, 손절 -8% / 익절 +15% / 72시간 뒤 청산(수수료 0.2%)으로 결과를 계산합니다. 아직 안 끝난 거래는 현재가로 평가합니다.</p>
+    <div class="row">${seg("g", CG, [["backfill", "과거 채움"], ["api", "실시간 기록"]], "setCG")}
+      ${seg("d", PDAYS, [["0", "전체 기간"], ["30", "최근 30일"], ["7", "최근 7일"]], "setPDAYS")}
+      <label class="muted">1건당 금액 $<input type="number" value="${PAMT}" min="1" style="width:90px" onchange="setPAMT(this.value)"></label>
+      ${CG === "api" ? `<button onclick="refreshPrices()">현재가로 갱신</button>` : ""}</div></section>`;
+  if (!PAPER) return head + `<div class="panel empty">불러오는 중…</div>`;
+  if (!PAPER.summary?.length) return head + `<div class="panel empty">아직 기록된 신호가 없습니다.</div>`;
+  const S = PAPER.summary, six = S.filter(r => r.method !== "M0"), base = S.find(r => r.method === "M0");
+  const inv = six.reduce((a, r) => a + r.invested, 0), tot = six.reduce((a, r) => a + r.total, 0), opn = six.reduce((a, r) => a + r.open, 0);
+  const best = [...six].sort((a, b) => b.ret - a.ret)[0];
+  const sumCols = [
+    {h: "방식", l: 1, v: x => x.method, f: x => `<span class="dot" style="background:${MCOLOR[x.method]}"></span><b>${x.method}</b> ${esc(x.name)}`},
+    {h: "매수 건수", v: x => x.trades, f: x => x.trades},
+    {h: "보유 중", v: x => x.open, f: x => x.open},
+    {h: "익절/손절/72h", v: x => x.tp, f: x => `<span class="up">${x.tp}</span> / <span class="down">${x.sl}</span> / ${x.time}`},
+    {h: "승률(청산)", v: x => x.win, f: x => x.win == null ? "–" : (x.win * 100).toFixed(0) + "%"},
+    {h: "투입", v: x => x.invested, f: x => "$" + x.invested.toFixed(0)},
+    {h: "실현 손익", v: x => x.realized, f: x => usd(x.realized), c: x => cls(x.realized)},
+    {h: "평가 손익", v: x => x.unrealized, f: x => usd(x.unrealized), c: x => cls(x.unrealized)},
+    {h: "합계", v: x => x.total, f: x => `<b>${usd(x.total)}</b>`, c: x => cls(x.total)},
+    {h: "수익률", v: x => x.ret, f: x => pct(x.ret, 2), c: x => cls(x.ret)},
+  ];
+  const posCols = closed => [
+    {h: closed ? "청산(UTC)" : "매수(UTC)", l: 1, v: x => closed ? x.exit_t : x.scan_t, f: x => ((closed ? x.exit_t : x.scan_t) || "").slice(5, 16)},
+    {h: "방식", l: 1, v: x => x.method, f: x => `<span class="dot" style="background:${MCOLOR[x.method]}"></span>${x.method}${x.rank ? " #" + x.rank : ""}`},
+    {h: "종목", l: 1, v: x => x.symbol, f: x => `<b>${esc(x.symbol)}</b>`},
+    {h: "매수가", v: x => x.price, f: x => +x.price.toPrecision(6)},
+    {h: closed ? "청산가" : "현재가", v: x => closed ? x.exit_price : x.last_price, f: x => { const v = closed ? x.exit_price : x.last_price; return v == null ? "–" : +v.toPrecision(6); }},
+    {h: "수익률", v: x => x.ret, f: x => pct(x.ret, 2), c: x => cls(x.ret)},
+    {h: "손익", v: x => x.pnl, f: x => usd(x.pnl), c: x => cls(x.pnl)},
+    {h: "최대상승/하락", v: x => x.mfe, f: x => `<span class="up">${pct(x.mfe)}</span> / <span class="down">${pct(x.mae)}</span>`},
+    {h: "결과", v: x => x.status, f: x => statusChip(x.status)},
+    {h: "차트", v: x => x.png ? 1 : 0, f: x => x.png ? "보기" : ""},
+  ];
+  const clickPng = list => s => { const r = list.find(x => x.symbol === s && x.png); if (r) zoom(img(r.png)); };
+  return head + stats([["$" + inv.toFixed(0), "6가지 방식 총 투입"], [usd(tot), "총 손익 (실현+평가)"], [pct(inv ? tot / inv : null, 2), "총 수익률"],
+                       [opn, "보유 중 포지션"], [best ? `${best.method} ${pct(best.ret, 2)}` : "–", "수익률 1위"],
+                       [base ? pct(base.ret, 2) : "–", "무작위 기준선 수익률"]]) +
+    `<section class="panel"><h2>방식별 가상 계좌</h2>${table(sumCols, S, {sort: 9})}
+      <p class="note">M0 무작위는 비교용 기준선이며 총합에서 제외. 수익률 = 합계 손익 / 투입.</p></section>
+     <section class="panel"><h2>누적 실현 손익</h2>${curveSVG(PAPER.curve)}</section>
+     <section class="panel"><h2>보유 중 (${PAPER.open.length})</h2>${table(posCols(false), PAPER.open, {click: clickPng(PAPER.open)})}</section>
+     <section class="panel"><h2>청산 완료 (최근 ${PAPER.closed.length})</h2>${table(posCols(true), PAPER.closed, {click: clickPng(PAPER.closed)})}</section>`;
+}
+
 function render() {
-  $("#view").innerHTML = {compare: viewCompare, pattern: viewPattern, range: viewRange, library: viewLibrary, bt: viewBT}[TAB]();
+  if (/^M[1-6]$/.test(TAB)) { $("#view").innerHTML = viewMethod(TAB); return; }
+  $("#view").innerHTML = {compare: viewCompare, paper: viewPaper, pattern: viewPattern, range: viewRange, library: viewLibrary, bt: viewBT}[TAB]();
 }
 $("#tabs").onclick = e => {
   const b = e.target.closest("button"); if (!b) return;
@@ -391,7 +536,7 @@ $("#tabs").onclick = e => {
   try { localStorage.setItem("tab", TAB); } catch (e) {}
   render();
 };
-try { const t = localStorage.getItem("tab"); if (t) { TAB = t; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === t)); } } catch (e) {}
+try { let t = localStorage.getItem("tab"); t = {pattern: "M1", range: "M2"}[t] || t; if (t) { TAB = t; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === t)); } } catch (e) {}
 
 async function loadRuns(pick) {
   const runs = await (await fetch("/api/runs")).json();
@@ -416,7 +561,7 @@ async function poll() {
   st.textContent = s.running ? "실행 중…" : s.code == null ? "대기" : s.code === 0 ? "완료" : "오류 (로그 확인)";
   st.className = "chip " + (s.running ? "" : s.code === 0 ? "go" : s.code ? "bad" : "");
   $("#runBtn").disabled = s.running;
-  if (wasRunning && !s.running) { BT = null; CMP = null; SIGS = null; await loadRuns(); }
+  if (wasRunning && !s.running) { BT = null; CMP = null; SIGS = null; MSIG = {}; PAPER = null; await loadRuns(); }
   wasRunning = s.running;
   return s;
 }

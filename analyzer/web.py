@@ -60,6 +60,20 @@ NUM = {"top": int, "pick": int, "lookback": int, "range_hours": int, "recent": i
        "min_qv": float, "max_chg": float, "charts": int}
 
 
+def start_update():
+    """실시간 기록의 열린 포지션을 현재가로 갱신 (tracker.py update)."""
+    with _lock:
+        if _job["proc"] and _job["proc"].poll() is None:
+            return False, "다른 작업이 실행 중입니다"
+        os.makedirs(OUT, exist_ok=True)
+        log = open(LOG, "w", encoding="utf-8")
+        env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+        args = [sys.executable, os.path.join(HERE, "tracker.py"), "update", "--source", DEFAULT_SOURCE]
+        _job.update(proc=subprocess.Popen(args, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=env),
+                    started=time.time(), args=args[2:])
+        return True, "시작"
+
+
 def start_scan(params):
     with _lock:
         if _job["proc"] and _job["proc"].poll() is None:
@@ -109,7 +123,7 @@ def tracker_api(p, query):
         sys.path.insert(0, HERE)
     import tracker
     if not os.path.exists(tracker.DB):
-        return {"rows": [], "info": None} if p == "/api/compare" else []
+        return {"rows": [], "info": None} if p == "/api/compare" else ({"summary": []} if p == "/api/paper" else [])
     con = tracker.db()
     try:
         df = tracker.load(con, group)
@@ -120,6 +134,15 @@ def tracker_api(p, query):
                         n72=int(df.r72.notna().sum()), btc_on=int(df.groupby("scan_t").btc_ok.first().sum()))
             return {"rows": tracker.compare(df, q.get("btc") == "1"), "info": info,
                     "methods": tracker.METHODS, "rules": dict(sl=tracker.SL, tp=tracker.TP, hold=tracker.HOLD, fee=tracker.FEE)}
+        if p == "/api/paper":
+            try:
+                amount = max(1.0, float(q.get("amount") or 100))
+                days = int(q.get("days") or 0)
+            except ValueError:
+                amount, days = 100.0, 0
+            return tracker.paper(df, amount, None, days)
+        if q.get("method") in tracker.METHODS:
+            df = df[df.method == q["method"]]
         lim = min(int(q.get("limit") or 300), 2000)
         d = df.sort_values(["scan_t", "method"], ascending=[False, True]).head(lim).drop(columns=["detail"])
         return json.loads(d.to_json(orient="records"))
@@ -162,7 +185,7 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, library())
         if p == "/api/backtest":
             return self._file(BT, "application/json; charset=utf-8") if os.path.exists(BT) else self._send(200, {})
-        if p in ("/api/compare", "/api/signals"):
+        if p in ("/api/compare", "/api/signals", "/api/paper"):
             return self._send(200, tracker_api(p, u.query))
         if p == "/api/status":
             return self._send(200, status())
@@ -173,7 +196,8 @@ class H(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
-        if urlparse(self.path).path != "/api/scan":
+        path = urlparse(self.path).path
+        if path not in ("/api/scan", "/api/update"):
             return self._send(404, {"error": "not found"})
         if self.headers.get("Origin") not in (None, f"http://localhost:{self.server.server_port}",
                                               f"http://127.0.0.1:{self.server.server_port}"):
@@ -183,7 +207,7 @@ class H(BaseHTTPRequestHandler):
             params = json.loads(self.rfile.read(n) or b"{}")
         except Exception:
             return self._send(400, {"error": "JSON 오류"})
-        ok, msg = start_scan(params)
+        ok, msg = start_scan(params) if path == "/api/scan" else start_update()
         self._send(200 if ok else 409, {"ok": ok, "msg": msg})
 
 

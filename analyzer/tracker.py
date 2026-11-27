@@ -1,8 +1,8 @@
 """6가지 진입 방식 — 신호 기록 → 이후 성과 추적 → 방식별 비교.
 
-방식 (모두 롱, 24h 거래대금 >= $2M, 이미 24h +15% 이상 오른 종목 제외, 방식별로 스캔당 최대 10개)
-  M0 무작위(기준선)     : 조건 없이 무작위 10종목 — 다른 방식이 "그냥 아무거나"보다 나은지 재는 잣대
-  M1 급등 차트 유사      : 24h 상승 상위 5개의 상승 직전 패턴과 닮은 상위 5종목 (pattern_scan 유사도)
+방식 (모두 롱, 24h 거래대금 >= $2M, 이미 24h +15% 이상 오른 종목 제외, 방식별로 스캔당 최대 6개)
+  M0 무작위(기준선)     : 조건 없이 무작위 6종목 — 다른 방식이 "그냥 아무거나"보다 나은지 재는 잣대
+  M1 급등 차트 유사      : 24h 상승 상위 5개의 상승 직전 패턴과 닮은 상위 6종목 (pattern_scan 유사도)
   M2 횡보 + 거래량 증가  : 직전 24h 박스폭 3%/5% 이내 + 최근 4h 거래량 2배 이상, 박스 하단 이탈 제외
   M3 이평선 골든크로스   : 1h EMA20 이 EMA50 을 최근 4시간 안에 상향 돌파 + 종가 > 1h EMA200
   M4 RSI 과매도 반등     : 1h RSI(14) 가 최근 3봉 안에 30 아래에서 30 위로 회복 (sub=div: 강세 다이버전스 동반)
@@ -39,7 +39,7 @@ import pattern_scan as ps  # noqa: E402
 DB = os.path.join(HERE, "data", "tracker.db")
 METHODS = {"M0": "무작위 (기준선)", "M1": "급등 차트 유사", "M2": "횡보 + 거래량 증가", "M3": "이평선 골든크로스",
            "M4": "RSI 과매도 반등", "M5": "펀딩+OI 숏스퀴즈", "M6": "BTC 대비 상대강도"}
-CAP, CAP_M1 = 10, 5
+CAP = CAP_M1 = 6          # 방식별 스캔당 선정 종목 수
 HOLD, SL, TP, FEE = 72, 0.08, 0.15, 0.002
 DEDUP_H = 24
 
@@ -54,6 +54,11 @@ def db():
         r4 REAL, r24 REAL, r72 REAL, mfe REAL, mae REAL, trade REAL, hit30 INTEGER, bars INTEGER DEFAULT 0,
         UNIQUE(source, method, symbol, scan_t))""")
     c.execute("CREATE INDEX IF NOT EXISTS ix_sig ON signals(source, method, symbol, scan_t)")
+    have = {r[1] for r in c.execute("PRAGMA table_info(signals)")}
+    for col, typ in [("status", "TEXT"), ("exit_price", "REAL"), ("exit_t", "TEXT"), ("last_price", "REAL"),
+                     ("last_t", "TEXT"), ("rank", "INTEGER"), ("png", "TEXT")]:
+        if col not in have:
+            c.execute(f"ALTER TABLE signals ADD COLUMN {col} {typ}")
     return c
 
 
@@ -71,10 +76,12 @@ def record(con, source, t, sigs):
         q = f"SELECT 1 FROM signals WHERE method=? AND symbol=? AND scan_t>? AND scan_t<? AND source IN ({','.join('?' * len(g))})"
         if con.execute(q, (s["method"], s["symbol"], lo, ts, *g)).fetchone():
             continue
-        cur = con.execute("INSERT OR IGNORE INTO signals(source,scan_t,method,sub,symbol,price,score,btc_ok,detail) VALUES(?,?,?,?,?,?,?,?,?)",
+        cur = con.execute("INSERT OR IGNORE INTO signals(source,scan_t,method,sub,symbol,price,score,btc_ok,detail,rank,png,status,last_price,last_t)"
+                          " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                           (source, ts, s["method"], s.get("sub", ""), s["symbol"], float(s["price"]),
                            None if s.get("score") is None else float(s["score"]), int(s["btc_ok"]),
-                           json.dumps(ps._clean(s.get("detail", {})), ensure_ascii=False)))
+                           json.dumps(ps._clean(s.get("detail", {})), ensure_ascii=False), s.get("rank"), s.get("png"),
+                           "open", float(s["price"]), ts))
         n += cur.rowcount
     con.commit()
     return n
@@ -259,6 +266,9 @@ def run_scan(src, a, source, charts=True, quiet=False, report=True):
     s1, rows1 = m1(patterns_cmp, snaps)
     s2, allr, sel2 = m2(snaps, a)
     sigs = s1 + s2 + m3(snaps) + m4(snaps) + m5(snaps, src) + m6(snaps, btc, m6_ok) + m0(snaps, now)
+    for m in METHODS:
+        for j, s in enumerate([x for x in sigs if x["method"] == m], 1):
+            s["rank"] = j
     for s in sigs:
         s["btc_ok"] = btc_ok
     cnt = {m: sum(1 for s in sigs if s["method"] == m) for m in METHODS}
@@ -292,8 +302,19 @@ def run_scan(src, a, source, charts=True, quiet=False, report=True):
             r["selected"] = bool(r["vol_ratio"] >= a.vol_mult and abs(r["move_recent"]) < a.max_chg)
         rep["range"] = dict(hours=a.range_hours, recent=a.recent, vol_mult=a.vol_mult,
                             n3=int((allr.box == "3%").sum()) if len(allr) else 0, n5=len(allr), rows=rows)
-        rep["signals"] = [dict(method=s["method"], sub=s["sub"], symbol=s["symbol"], price=s["price"],
-                               score=s["score"], detail=ps._clean(s["detail"])) for s in sigs]
+        if charts:
+            by = {x["symbol"]: x for x in snaps}
+            for s in sigs:
+                if s["method"] == "M0":
+                    continue
+                png = os.path.join(ps.OUT_DIR, f"pick_{stamp}_{s['method']}_{s['symbol']}.png")
+                try:
+                    ps.plot_pattern(by[s["symbol"]], png, f"{s['symbol']}  {s['method']} pick #{s['rank']}  @ {now:%m-%d %H:%M} UTC")
+                    s["png"] = os.path.relpath(png, ps.ROOT).replace(os.sep, "/")
+                except Exception as e:
+                    print("  chart fail", s["symbol"], e)
+        rep["signals"] = [dict(method=s["method"], sub=s["sub"], symbol=s["symbol"], price=s["price"], rank=s.get("rank"),
+                               score=s["score"], png=s.get("png"), detail=ps._clean(s["detail"])) for s in sigs]
         ps.save_report(rep, stamp)
     return now, sigs
 
@@ -308,15 +329,20 @@ def outcome(k, p0):
     h, l, c = k.h.values, k.l.values, k.c.values
     res = dict(bars=n, r4=c[3] / p0 - 1 if n >= 4 else None, r24=c[23] / p0 - 1 if n >= 24 else None,
                r72=c[71] / p0 - 1 if n >= 72 else None, mfe=h.max() / p0 - 1, mae=l.min() / p0 - 1)
-    tr = None
+    tr, st, xi = None, "open", None
     for i in range(n):
         if l[i] <= p0 * (1 - SL):
-            tr = -SL; break
+            tr, st, xi = -SL, "sl", i; break
         if h[i] >= p0 * (1 + TP):
-            tr = TP; break
+            tr, st, xi = TP, "tp", i; break
     if tr is None and n >= HOLD:
-        tr = c[-1] / p0 - 1
+        tr, st, xi = c[-1] / p0 - 1, "time", n - 1
     res["trade"] = None if tr is None else tr - FEE
+    res["status"] = st
+    res["exit_price"] = None if tr is None else p0 * (1 + tr)
+    res["exit_t"] = None if xi is None else str(k.index[xi] + pd.Timedelta(hours=1))
+    res["last_price"] = float(c[-1])
+    res["last_t"] = str(k.index[-1] + pd.Timedelta(hours=1))
     res["hit30"] = 1 if res["mfe"] >= 0.30 else (0 if n >= HOLD else None)
     return res
 
@@ -324,8 +350,9 @@ def outcome(k, p0):
 def update(con, src, source):
     g = _grp(source)
     now = pd.Timestamp(src.now(), unit="ms")
-    q = f"SELECT id, symbol, scan_t, price FROM signals WHERE bars < {HOLD} AND source IN ({','.join('?' * len(g))}) AND scan_t <= ?"
-    rows = pd.DataFrame(con.execute(q, (*g, str(now - pd.Timedelta(hours=4)))).fetchall(), columns=["id", "symbol", "scan_t", "price"])
+    q = (f"SELECT id, symbol, scan_t, price FROM signals WHERE bars < {HOLD} "
+         f"AND source IN ({','.join('?' * len(g))}) AND scan_t <= ?")
+    rows = pd.DataFrame(con.execute(q, (*g, str(now - pd.Timedelta(hours=1)))).fetchall(), columns=["id", "symbol", "scan_t", "price"])
     if rows.empty:
         return 0
     rows["t"] = pd.to_datetime(rows.scan_t)
@@ -345,8 +372,16 @@ def update(con, src, source):
     with ThreadPoolExecutor(8) as ex:
         allres = [y for ys in ex.map(lambda s: ps._safe(one, s) or [], rows.symbol.unique()) for y in ys]
     for i, r in allres:
-        con.execute("UPDATE signals SET bars=?, r4=?, r24=?, r72=?, mfe=?, mae=?, trade=?, hit30=? WHERE id=?",
-                    (r["bars"], r["r4"], r["r24"], r["r72"], r["mfe"], r["mae"], r["trade"], r["hit30"], i))
+        con.execute("UPDATE signals SET bars=?, r4=?, r24=?, r72=?, mfe=?, mae=?, trade=?, hit30=?, status=?, exit_price=?, exit_t=?,"
+                    " last_price=?, last_t=? WHERE id=?",
+                    (r["bars"], r["r4"], r["r24"], r["r72"], r["mfe"], r["mae"], r["trade"], r["hit30"], r["status"],
+                     r["exit_price"], r["exit_t"], r["last_price"], r["last_t"], i))
+    # 실시간: 아직 열린 포지션은 현재가(티커)로 평가
+    if hasattr(src, "prices"):
+        px = src.prices()
+        for i, sym in con.execute("SELECT id, symbol FROM signals WHERE status='open' AND source='api'").fetchall():
+            if sym in px:
+                con.execute("UPDATE signals SET last_price=?, last_t=? WHERE id=?", (px[sym], str(now), i))
     con.commit()
     return len(allres)
 
@@ -388,6 +423,45 @@ def _m(s):
 def _md(s):
     s = pd.Series(s).dropna().astype(float)
     return float(s.median()) if len(s) else None
+
+
+def paper(df, amount=100.0, method=None, days=0):
+    """가상 매매: 신호마다 amount USDT 매수, 손절/익절/72h 규칙으로 청산. 미청산은 현재가로 평가."""
+    if df.empty:
+        return dict(summary=[], open=[], closed=[], curve={})
+    df = df.copy()
+    df["t"] = pd.to_datetime(df.scan_t)
+    if days:
+        df = df[df.t >= df.t.max() - pd.Timedelta(days=days)]
+    if method:
+        df = df[df.method == method]
+    df["closed"] = df.trade.notna()
+    df["ret"] = np.where(df.closed, df.trade, df.last_price / df.price - 1 - FEE)
+    df["pnl"] = df.ret * amount
+    summ = []
+    for m, name in METHODS.items():
+        d = df[df.method == m]
+        if d.empty:
+            continue
+        c, o = d[d.closed], d[~d.closed]
+        summ.append(dict(method=m, name=name, trades=len(d), open=len(o), closed=len(c), invested=len(d) * amount,
+                         realized=float(c.pnl.sum()), unrealized=float(o.pnl.sum()), total=float(d.pnl.sum()),
+                         ret=float(d.pnl.sum() / (len(d) * amount)), win=float((c.ret > 0).mean()) if len(c) else None,
+                         tp=int((c.status == "tp").sum()), sl=int((c.status == "sl").sum()), time=int((c.status == "time").sum()),
+                         best=float(d.ret.max()), worst=float(d.ret.min())))
+    curve = {}
+    c = df[df.closed & df.exit_t.notna()].copy()
+    if len(c):
+        c["xt"] = pd.to_datetime(c.exit_t).dt.floor("D")
+        for m, d in c.groupby("method"):
+            s = d.groupby("xt").pnl.sum().cumsum()
+            curve[m] = [[str(t)[:10], round(float(v), 2)] for t, v in s.items()]
+    cols = ["id", "scan_t", "method", "sub", "symbol", "rank", "price", "last_price", "last_t", "exit_price", "exit_t",
+            "status", "ret", "pnl", "btc_ok", "mfe", "mae", "png"]
+    op = df[~df.closed].sort_values("scan_t", ascending=False)[cols].head(300)
+    cl = df[df.closed].sort_values("exit_t", ascending=False)[cols].head(300)
+    js = lambda x: json.loads(x.to_json(orient="records"))
+    return dict(summary=summ, open=js(op), closed=js(cl), curve=curve, amount=amount)
 
 
 def write_compare(con, group):
@@ -534,7 +608,12 @@ def add_klines_since():
             return None
         return k[(k.index >= pd.Timestamp(start_ms, unit="ms")) & (k.index + pd.Timedelta(hours=1) <= self.end)]
 
+    def api_prices(self):
+        d = self._get("/fapi/v1/ticker/price") or []
+        return {x["symbol"]: float(x["price"]) for x in d}
+
     ps.BinanceAPI.klines_since = api_since
+    ps.BinanceAPI.prices = api_prices
     ps.Archive.klines_since = arc_since
 
 
