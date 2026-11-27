@@ -37,6 +37,7 @@ sys.path.insert(0, HERE)
 import pattern_scan as ps  # noqa: E402
 
 DB = os.path.join(HERE, "data", "tracker.db")
+SEED = os.path.join(HERE, "data", "backfill_seed.db")   # 저장소에 포함된 과거 채움 결과 (PC 에서 backfill 안 돌려도 비교 가능)
 METHODS = {"M0": "무작위 (기준선)", "M1": "급등 차트 유사", "M2": "횡보 + 거래량 증가", "M3": "이평선 골든크로스",
            "M4": "RSI 과매도 반등", "M5": "펀딩+OI 숏스퀴즈", "M6": "BTC 대비 상대강도"}
 CAP = CAP_M1 = 6          # 방식별 스캔당 선정 종목 수
@@ -113,15 +114,27 @@ def m1(patterns, snaps):
         return [], []
     fr = pd.DataFrame([s["feat"] for s in snaps])
     fscale = {f: float(fr[f].std()) for f in ps.FEATS if f in fr and fr[f].notna().sum() > 10}
+    # 패턴마다 후보 전체의 점수를 z-점수로 바꿔 비교 → 특징이 평범한 패턴 하나가 모든 후보를 '닮음'으로 가져가는 것 방지
+    sims = [[ps.similarity(p, s, fscale) for p in patterns] for s in snaps]
+    sc = np.array([[x[0] for x in row] for row in sims])
+    z = (sc - sc.mean(0)) / np.where(sc.std(0) > 0, sc.std(0), 1)
     rows = []
-    for s in snaps:
-        best = max(((ps.similarity(p, s, fscale), p) for p in patterns), key=lambda x: x[0][0])
-        (sc, shp, fs, per), p = best
-        rows.append((sc, shp, fs, per, p, s))
-    rows.sort(key=lambda x: -x[0])
-    out = [sig("M1", s, sc, like=p["symbol"], like_launch=p["launch"], shape=shp, feat=fs, **{f"corr_{k}": v for k, v in per.items()})
-           for sc, shp, fs, per, p, s in rows[:CAP_M1]]
-    return out, rows
+    for i, s in enumerate(snaps):
+        j = int(np.argmax(z[i]))
+        scr, shp, fs, per = sims[i][j]
+        rows.append((scr, shp, fs, per, patterns[j], s, float(z[i, j])))
+    rows.sort(key=lambda x: -x[6])
+    out, used = [], {}
+    for scr, shp, fs, per, p, s, zz in rows:           # 한 패턴에서 최대 2종목
+        key = (p["symbol"], p["launch"])
+        if used.get(key, 0) >= 2:
+            continue
+        used[key] = used.get(key, 0) + 1
+        out.append(sig("M1", s, zz, like=p["symbol"], like_launch=p["launch"], sim=scr, shape=shp, feat=fs,
+                       **{f"corr_{k}": v for k, v in per.items()}))
+        if len(out) >= CAP_M1:
+            break
+    return out, [r[:6] for r in rows]
 
 
 def m2(snaps, a):
@@ -222,13 +235,14 @@ def run_scan(src, a, source, charts=True, quiet=False, report=True):
         k1 = src.klines(r.symbol, "1h", ps.NEED["1h"])
         if k1 is None or len(k1) < a.lookback + 10:
             continue
-        tl, tp, gain, gl = ps.find_launch(k1, a.lookback, a.launch_frac)
-        end = int(tl.value // 1_000_000)
         if hasattr(src, "oi_allow"):
             src.oi_allow.add(r.symbol)
-        snap = ps.snapshot(src, r.symbol, end)
-        if snap is None:
+        got = ps.pump_pattern(src, r.symbol, k1, a.lookback, a.launch_frac)
+        if got is None:
+            say(f"  {r.symbol}: 상승 직전 상태가 깨끗하지 않아 패턴에서 제외 (이미 상승 중이거나 launch 탐지 실패)")
             continue
+        snap, tl, tp, gain, gl = got
+        end = int(tl.value // 1_000_000)
         snap.update(kind="pump", launch=str(tl), peak=str(tp), gain=round(gain, 4), gain_from_low=round(gl, 4),
                     chg24=round(r.chg24, 4), recorded=str(now))
         if charts:
@@ -251,7 +265,8 @@ def run_scan(src, a, source, charts=True, quiet=False, report=True):
                     fh.write(json.dumps({k: v for k, v in p.items() if not k.startswith("_")}, ensure_ascii=False) + "\n")
         if a.library and os.path.exists(lib):
             keys = {(p["symbol"], p["launch"]) for p in patterns}
-            patterns_cmp = patterns + [p for p in map(json.loads, open(lib, encoding="utf-8")) if (p["symbol"], p["launch"]) not in keys]
+            patterns_cmp = patterns + [p for p in map(json.loads, open(lib, encoding="utf-8"))
+                                       if (p["symbol"], p["launch"]) not in keys and ps.clean_pre(p["feat"], p["launch"], p["peak"])]
         else:
             patterns_cmp = patterns
     else:
@@ -379,9 +394,9 @@ def update(con, src, source):
     # 실시간: 아직 열린 포지션은 현재가(티커)로 평가
     if hasattr(src, "prices"):
         px = src.prices()
-        for i, sym in con.execute("SELECT id, symbol FROM signals WHERE status='open' AND source='api'").fetchall():
+        for i, sym in con.execute("SELECT id, symbol FROM signals WHERE (status IS NULL OR status='open') AND source='api'").fetchall():
             if sym in px:
-                con.execute("UPDATE signals SET last_price=?, last_t=? WHERE id=?", (px[sym], str(now), i))
+                con.execute("UPDATE signals SET last_price=?, last_t=?, status=COALESCE(status,'open') WHERE id=?", (px[sym], str(now), i))
     con.commit()
     return len(allres)
 
@@ -389,7 +404,26 @@ def update(con, src, source):
 # ------------------------------------------------------------------ 비교
 def load(con, group="backfill"):
     g = _grp(group)
-    return pd.read_sql_query(f"SELECT * FROM signals WHERE source IN ({','.join('?' * len(g))})", con, params=g)
+    df = pd.read_sql_query(f"SELECT * FROM signals WHERE source IN ({','.join('?' * len(g))})", con, params=g)
+    if group != "api" and not (df.source == "backfill").any() and os.path.exists(SEED):
+        with sqlite3.connect(SEED) as sc:
+            seed = pd.read_sql_query("SELECT * FROM signals WHERE source='backfill'", sc)
+        df = pd.concat([seed, df], ignore_index=True)
+    return df
+
+
+def export_seed():
+    """과거 채움 결과만 SEED 파일로 복사 (저장소 커밋용)."""
+    if os.path.exists(SEED):
+        os.remove(SEED)
+    with sqlite3.connect(DB) as c:
+        c.execute(f"ATTACH DATABASE ? AS s", (SEED,))
+        c.execute("CREATE TABLE s.signals AS SELECT * FROM main.signals WHERE source='backfill'")
+        n = c.execute("SELECT COUNT(*) FROM s.signals").fetchone()[0]
+        c.commit()
+    with sqlite3.connect(SEED) as c:
+        c.execute("VACUUM")
+    print(f"seed 저장 {n}건 → {os.path.relpath(SEED, ps.ROOT)}")
 
 
 def compare(df, btc_only=False):
@@ -425,7 +459,7 @@ def _md(s):
     return float(s.median()) if len(s) else None
 
 
-def paper(df, amount=100.0, method=None, days=0):
+def paper(df, amount=100.0, method=None, days=0, btc_only=False):
     """가상 매매: 신호마다 amount USDT 매수, 손절/익절/72h 규칙으로 청산. 미청산은 현재가로 평가."""
     if df.empty:
         return dict(summary=[], open=[], closed=[], curve={})
@@ -435,7 +469,14 @@ def paper(df, amount=100.0, method=None, days=0):
         df = df[df.t >= df.t.max() - pd.Timedelta(days=days)]
     if method:
         df = df[df.method == method]
+    if btc_only:
+        df = df[df.btc_ok == 1]
+    if df.empty:
+        return dict(summary=[], open=[], closed=[], curve={}, amount=amount)
     df["closed"] = df.trade.notna()
+    df["stale"] = df.last_price.isna()            # 아직 현재가 갱신 전 (선정가로 평가)
+    df["last_price"] = df.last_price.fillna(df.price)
+    df["status"] = df.status.fillna("open")
     df["ret"] = np.where(df.closed, df.trade, df.last_price / df.price - 1 - FEE)
     df["pnl"] = df.ret * amount
     summ = []
@@ -448,7 +489,7 @@ def paper(df, amount=100.0, method=None, days=0):
                          realized=float(c.pnl.sum()), unrealized=float(o.pnl.sum()), total=float(d.pnl.sum()),
                          ret=float(d.pnl.sum() / (len(d) * amount)), win=float((c.ret > 0).mean()) if len(c) else None,
                          tp=int((c.status == "tp").sum()), sl=int((c.status == "sl").sum()), time=int((c.status == "time").sum()),
-                         best=float(d.ret.max()), worst=float(d.ret.min())))
+                         stale=int(d.stale.sum()), best=_m([d.ret.max()]), worst=_m([d.ret.min()])))
     curve = {}
     c = df[df.closed & df.exit_t.notna()].copy()
     if len(c):
@@ -457,7 +498,7 @@ def paper(df, amount=100.0, method=None, days=0):
             s = d.groupby("xt").pnl.sum().cumsum()
             curve[m] = [[str(t)[:10], round(float(v), 2)] for t, v in s.items()]
     cols = ["id", "scan_t", "method", "sub", "symbol", "rank", "price", "last_price", "last_t", "exit_price", "exit_t",
-            "status", "ret", "pnl", "btc_ok", "mfe", "mae", "png"]
+            "status", "ret", "pnl", "btc_ok", "mfe", "mae", "png", "stale"]
     op = df[~df.closed].sort_values("scan_t", ascending=False)[cols].head(300)
     cl = df[df.closed].sort_values("exit_t", ascending=False)[cols].head(300)
     js = lambda x: json.loads(x.to_json(orient="records"))
@@ -619,7 +660,7 @@ def add_klines_since():
 
 def main():
     ap = argparse.ArgumentParser(description="6가지 방식 신호 기록 / 성과 추적 / 비교")
-    ap.add_argument("cmd", choices=["scan", "update", "backfill", "report"])
+    ap.add_argument("cmd", choices=["scan", "update", "backfill", "report", "export-seed"])
     ap.add_argument("--source", choices=["api", "archive"], default="api")
     ap.add_argument("--days", type=int, default=60, help="backfill: 과거 며칠")
     ap.add_argument("--every", type=int, default=4, help="backfill: 몇 시간마다 스캔")
@@ -646,6 +687,8 @@ def main():
     elif a.cmd == "update":
         src = ps.BinanceAPI() if a.source == "api" else ps.Archive()
         print(f"성과 갱신 {update(con, src, a.source)}건")
+    elif a.cmd == "export-seed":
+        export_seed()
     elif a.cmd == "report":
         write_compare(con, a.group or ("api" if a.source == "api" else "backfill"))
     else:

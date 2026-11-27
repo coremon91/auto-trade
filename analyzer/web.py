@@ -140,7 +140,7 @@ def tracker_api(p, query):
                 days = int(q.get("days") or 0)
             except ValueError:
                 amount, days = 100.0, 0
-            return tracker.paper(df, amount, None, days)
+            return tracker.paper(df, amount, None, days, q.get("btc") == "1")
         if q.get("method") in tracker.METHODS:
             df = df[df.method == q["method"]]
         lim = min(int(q.get("limit") or 300), 2000)
@@ -150,13 +150,48 @@ def tracker_api(p, query):
         con.close()
 
 
+def _nan2none(x):
+    """JSON 에 NaN/Infinity 가 들어가면 브라우저가 못 읽음 → null 로."""
+    if isinstance(x, float):
+        return x if x == x and x not in (float("inf"), float("-inf")) else None
+    if isinstance(x, dict):
+        return {k: _nan2none(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_nan2none(v) for v in x]
+    return x
+
+
+def _load_json(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)        # NaN 허용해서 읽고 _send 에서 null 로 바꿈
+
+
+def auto_update_loop(every):
+    """실시간 기록의 보유 중 포지션을 every 초마다 현재가로 갱신 (스캔 중이면 건너뜀)."""
+    log = os.path.join(OUT, "web_update.log")
+    while True:
+        time.sleep(every)
+        if DEFAULT_SOURCE != "api":
+            continue
+        if _job["proc"] and _job["proc"].poll() is None:
+            continue
+        try:
+            os.makedirs(OUT, exist_ok=True)
+            with open(log, "w", encoding="utf-8") as fh:
+                env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+                subprocess.run([sys.executable, os.path.join(HERE, "tracker.py"), "update", "--source", "api"],
+                               cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT, env=env, timeout=600)
+        except Exception:
+            pass
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         if isinstance(body, (dict, list)):
-            body = json.dumps(body, ensure_ascii=False, default=str).encode()
+            body = json.dumps(_nan2none(body), ensure_ascii=False, default=str, allow_nan=False).encode()
         elif isinstance(body, str):
             body = body.encode()
         self.send_response(code)
@@ -180,11 +215,11 @@ class H(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/run/(\d{8}_\d{4}(?:_\d+)?)", p)
         if m:
             f = os.path.join(OUT, f"run_{m.group(1)}.json")
-            return self._file(f, "application/json; charset=utf-8") if os.path.exists(f) else self._send(404, {"error": "없음"})
+            return self._send(200, _load_json(f)) if os.path.exists(f) else self._send(404, {"error": "없음"})
         if p == "/api/library":
             return self._send(200, library())
         if p == "/api/backtest":
-            return self._file(BT, "application/json; charset=utf-8") if os.path.exists(BT) else self._send(200, {})
+            return self._send(200, _load_json(BT)) if os.path.exists(BT) else self._send(200, {})
         if p in ("/api/compare", "/api/signals", "/api/paper"):
             return self._send(200, tracker_api(p, u.query))
         if p == "/api/status":
@@ -217,9 +252,12 @@ def main():
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--source", choices=["api", "archive"], default="api", help="화면에서 실행할 스캔의 기본 데이터 소스")
+    ap.add_argument("--refresh", type=int, default=5, help="보유 중 포지션 현재가 자동 갱신 간격(분), 0 = 끔")
     a = ap.parse_args()
     DEFAULT_SOURCE = a.source
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), H)
+    if a.refresh > 0:
+        threading.Thread(target=auto_update_loop, args=(a.refresh * 60,), daemon=True).start()
     url = f"http://localhost:{a.port}"
     print(f"대시보드: {url}   (종료: Ctrl+C)", flush=True)
     if not a.no_browser:

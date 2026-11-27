@@ -8,5 +8,6 @@ data/bt_full.log
 backtest/results_regime/trades.csv
 analyzer/out/
 analyzer/patterns/
-analyzer/data/
+analyzer/data/*
+!analyzer/data/backfill_seed.db
 data/backfill.log

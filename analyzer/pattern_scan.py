@@ -262,6 +262,37 @@ def find_launch(k1, lookback, frac=0.25):
     return w.index[il], w.index[ip], pk / base - 1, pk / lo - 1
 
 
+def clean_pre(f, launch, peak):
+    """패턴으로 쓸 만한 '상승 직전' 상태인지: launch 가 peak 보다 앞이고, 직전 24h 에 이미 15% 넘게 오르지 않았고, RSI 75 이하."""
+    if str(launch) >= str(peak):
+        return False
+    r24, rsi_ = f.get("ret_24h"), f.get("rsi_1h")
+    if r24 is not None and np.isfinite(r24) and r24 > 0.15:
+        return False
+    if rsi_ is not None and np.isfinite(rsi_) and rsi_ > 75:
+        return False
+    return True
+
+
+def pump_pattern(src, sym, k1, lookback, frac=0.25, min_gain=0.15):
+    """급등 종목의 launch 직전 스냅샷. 1차 launch(마지막 상승 구간 시작)가 이미 상승 중이면
+    저점 봉으로 되돌려 다시 시도, 그래도 아니면 None. 반환 (snap, launch, peak, gain, gain_from_low)."""
+    tl, tp, gain, gl = find_launch(k1, lookback, frac)
+    tries = [(tl, gain)]
+    w = k1.iloc[-lookback:]
+    ip = int(np.argmax(w.h.values))
+    il = int(np.argmin(w.l.values[: ip + 1]))
+    if w.index[il] != tl:
+        tries.append((w.index[il], gl))
+    for t, g in tries:
+        if t >= tp or g < min_gain:
+            continue
+        snap = snapshot(src, sym, int(t.value // 1_000_000))
+        if snap is not None and clean_pre(snap["feat"], t, tp):
+            return snap, t, tp, g, gl
+    return None
+
+
 def corr(a, b):
     a, b = np.asarray(a), np.asarray(b)
     if a.std() == 0 or b.std() == 0:
@@ -377,11 +408,11 @@ def main(a):
         k1 = src.klines(r.symbol, "1h", NEED["1h"])
         if k1 is None or len(k1) < a.lookback + 10:
             print(f"  {r.symbol}: 데이터 부족, 건너뜀"); continue
-        t_launch, t_peak, gain, gain_low = find_launch(k1, a.lookback, a.launch_frac)
+        got = pump_pattern(src, r.symbol, k1, a.lookback, a.launch_frac)
+        if got is None:
+            print(f"  {r.symbol}: 상승 직전 상태가 깨끗하지 않아 제외 (이미 상승 중이거나 launch 탐지 실패)"); continue
+        snap, t_launch, t_peak, gain, gain_low = got
         end_ms = int(t_launch.value // 1_000_000)
-        snap = snapshot(src, r.symbol, end_ms)
-        if snap is None:
-            print(f"  {r.symbol}: launch 이전 데이터 부족, 건너뜀"); continue
         snap.update(kind="pump", launch=str(t_launch), peak=str(t_peak), gain=round(gain, 4), gain_from_low=round(gain_low, 4),
                     chg24=round(r.chg24, 4), recorded=str(now))
         patterns.append(snap)
