@@ -1,2 +1,5 @@
 data/raw/
 __pycache__/
+data/fut_*/
+data/baseline_features.pkl
+data/fetch_*.log
