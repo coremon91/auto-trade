@@ -9,3 +9,4 @@ backtest/results_regime/trades.csv
 analyzer/out/
 analyzer/patterns/
 analyzer/data/
+data/backfill.log
