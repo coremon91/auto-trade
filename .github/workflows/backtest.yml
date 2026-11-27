@@ -1,0 +1,34 @@
+name: pump-backtest
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/project-thread-hsthh8]
+    paths: ["backtest/**", ".github/workflows/backtest.yml"]
+permissions:
+  contents: write
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: pip install pandas numpy requests
+      - uses: actions/cache@v4
+        with:
+          path: data/bt
+          key: bt-data-2025-11-01-2026-11-26-v1
+      - name: fetch (data.binance.vision)
+        run: python backtest/pump_bt.py fetch --start 2025-11-01 --end 2026-11-26 --data data/bt --workers 32
+      - name: run
+        run: python backtest/pump_bt.py run --data data/bt --from 2025-11-27 --out backtest/results
+      - uses: actions/upload-artifact@v4
+        with: {name: backtest-results, path: backtest/results}
+      - name: commit summary
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898341+github-actions[bot]@users.noreply.github.com"
+          git add backtest/results/summary.json
+          git commit -m "Backtest results [skip ci]" || exit 0
+          git push
