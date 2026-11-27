@@ -26,6 +26,26 @@ python analyzer/pattern_scan.py
 python analyzer/pattern_scan.py --mode range --range-hours 48 --vol-mult 1.5
 ```
 
+### 6가지 방식 비교 (analyzer/tracker.py)
+
+| 방식 | 조건 |
+|---|---|
+| M0 무작위 | 기준선. 조건 없이 무작위 10종목 |
+| M1 급등 차트 유사 | 24h 상승 상위 5개의 상승 직전 패턴과 닮은 상위 5종목 |
+| M2 횡보 + 거래량 | 직전 24h 박스폭 3%/5% 이내 + 최근 4h 거래량 2배↑ |
+| M3 이평선 골든크로스 | 1h EMA20 이 EMA50 상향 돌파(4h 이내) + 종가 > EMA200 |
+| M4 RSI 과매도 반등 | 1h RSI 30 아래 → 위 회복 (강세 다이버전스 동반 시 div) |
+| M5 펀딩+OI 숏스퀴즈 | 7일 -15%↓, 24h -12%~+3%, 펀딩 ≤ 0, OI 24h +10%↑ |
+| M6 BTC 대비 상대강도 | BTC 눌림 후 회복 중, 코인/BTC 비율 7일 고점 근처 + 7일 수익률 BTC 대비 +10%p↑ |
+
+- 스캔할 때마다 신호를 `analyzer/data/tracker.db` 에 쌓고, 4h·24h·72h 뒤 수익률, 최대 상승/하락,
+  가상 거래(손절 -8% / 익절 +15% / 72h, 수수료 0.2%) 결과를 자동 계산합니다. 모든 신호에 BTC 20일선 필터 여부도 기록.
+- `python analyzer/tracker.py scan` : 지금 스캔 + 기록 + 지난 신호 성과 갱신 (대시보드의 스캔 실행 버튼과 같음)
+- `python analyzer/tracker.py backfill --days 60 --every 4` : 과거 60일을 4시간마다 스캔한 것처럼 채워 바로 비교 가능
+  (공개 아카이브 사용, 처음엔 15m 데이터 다운로드로 오래 걸림)
+- `python analyzer/tracker.py report` : 비교표 `analyzer/out/compare_*.md`
+- 대시보드 **6가지 비교** 탭: 과거 채움 / 실시간 기록, 전체 / BTC 필터 전환
+
 ### 웹 대시보드 (localhost)
 
 > 실행 전 Python 3.9 이상 필요 (https://www.python.org/downloads/ , 설치 시 "Add python.exe to PATH" 체크).

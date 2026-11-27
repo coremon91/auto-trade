@@ -8,3 +8,4 @@ data/bt_full.log
 backtest/results_regime/trades.csv
 analyzer/out/
 analyzer/patterns/
+analyzer/data/

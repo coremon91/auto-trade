@@ -64,15 +64,11 @@ def start_scan(params):
     with _lock:
         if _job["proc"] and _job["proc"].poll() is None:
             return False, "이미 스캔이 실행 중입니다"
-        args = [sys.executable, os.path.join(HERE, "pattern_scan.py")]
+        args = [sys.executable, os.path.join(HERE, "tracker.py"), "scan"]   # 6가지 방식 모두 실행 + 신호 기록
         src = params.get("source") or DEFAULT_SOURCE
         if src not in ALLOWED["source"]:
             return False, "source 값 오류"
         args += ["--source", src]
-        mode = params.get("mode") or "both"
-        if mode not in ALLOWED["mode"]:
-            return False, "mode 값 오류"
-        args += ["--mode", mode]
         for k, typ in NUM.items():
             v = params.get(k)
             if v in (None, ""):
@@ -102,6 +98,33 @@ def status():
         tail = "\n".join(lines[-25:])
     return dict(running=running, code=(p.returncode if p and not running else None), default_source=DEFAULT_SOURCE,
                 started=_job["started"], args=_job["args"], log=tail)
+
+
+def tracker_api(p, query):
+    """6가지 방식 비교 / 최근 신호 (analyzer/data/tracker.db)."""
+    from urllib.parse import parse_qs
+    q = {k: v[0] for k, v in parse_qs(query).items()}
+    group = "api" if q.get("group") == "api" else "backfill"
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import tracker
+    if not os.path.exists(tracker.DB):
+        return {"rows": [], "info": None} if p == "/api/compare" else []
+    con = tracker.db()
+    try:
+        df = tracker.load(con, group)
+        if p == "/api/compare":
+            if df.empty:
+                return {"rows": [], "info": None}
+            info = dict(start=df.scan_t.min(), end=df.scan_t.max(), scans=int(df.scan_t.nunique()), n=len(df),
+                        n72=int(df.r72.notna().sum()), btc_on=int(df.groupby("scan_t").btc_ok.first().sum()))
+            return {"rows": tracker.compare(df, q.get("btc") == "1"), "info": info,
+                    "methods": tracker.METHODS, "rules": dict(sl=tracker.SL, tp=tracker.TP, hold=tracker.HOLD, fee=tracker.FEE)}
+        lim = min(int(q.get("limit") or 300), 2000)
+        d = df.sort_values(["scan_t", "method"], ascending=[False, True]).head(lim).drop(columns=["detail"])
+        return json.loads(d.to_json(orient="records"))
+    finally:
+        con.close()
 
 
 class H(BaseHTTPRequestHandler):
@@ -139,6 +162,8 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, library())
         if p == "/api/backtest":
             return self._file(BT, "application/json; charset=utf-8") if os.path.exists(BT) else self._send(200, {})
+        if p in ("/api/compare", "/api/signals"):
+            return self._send(200, tracker_api(p, u.query))
         if p == "/api/status":
             return self._send(200, status())
         m = re.fullmatch(r"/img/(?:analyzer/)?(out|patterns)/([^/\\]+\.png)", p)   # 이전 실행 기록(역슬래시 경로)도 허용

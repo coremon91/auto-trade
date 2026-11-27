@@ -336,7 +336,7 @@ def plot_pattern(snap, path, title, launch=None, after=None):
 
 
 # ------------------------------------------------------------------ 메인
-def main(a):
+def setup_fonts():
     try:
         import matplotlib
         from matplotlib import font_manager
@@ -346,6 +346,10 @@ def main(a):
         matplotlib.rcParams["axes.unicode_minus"] = False
     except Exception:
         pass
+
+
+def main(a):
+    setup_fonts()
     os.makedirs(PAT_DIR, exist_ok=True); os.makedirs(OUT_DIR, exist_ok=True)
     src = BinanceAPI() if a.source == "api" else Archive()
     now = pd.Timestamp(src.now(), unit="ms")

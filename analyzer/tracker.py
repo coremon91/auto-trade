@@ -1,0 +1,598 @@
+"""6가지 진입 방식 — 신호 기록 → 이후 성과 추적 → 방식별 비교.
+
+방식 (모두 롱, 24h 거래대금 >= $2M, 이미 24h +15% 이상 오른 종목 제외, 방식별로 스캔당 최대 10개)
+  M0 무작위(기준선)     : 조건 없이 무작위 10종목 — 다른 방식이 "그냥 아무거나"보다 나은지 재는 잣대
+  M1 급등 차트 유사      : 24h 상승 상위 5개의 상승 직전 패턴과 닮은 상위 5종목 (pattern_scan 유사도)
+  M2 횡보 + 거래량 증가  : 직전 24h 박스폭 3%/5% 이내 + 최근 4h 거래량 2배 이상, 박스 하단 이탈 제외
+  M3 이평선 골든크로스   : 1h EMA20 이 EMA50 을 최근 4시간 안에 상향 돌파 + 종가 > 1h EMA200
+  M4 RSI 과매도 반등     : 1h RSI(14) 가 최근 3봉 안에 30 아래에서 30 위로 회복 (sub=div: 강세 다이버전스 동반)
+  M5 펀딩+OI 숏스퀴즈    : 7일 -15% 이하 & 24h -12%~+3% & 펀딩 <= 0 & OI 24h +10% 이상
+  M6 BTC 대비 상대강도   : BTC 가 7일 고점 대비 -3% 이하로 눌렸다가 1h EMA20 위로 회복 중일 때,
+                           코인/BTC 비율이 7일 고점의 97% 이상 & 7일 수익률이 BTC 보다 10%p 이상 높은 종목
+  모든 신호에 btc_ok (BTC 일봉 종가 > 20일선) 를 같이 기록 → 비교 때 BTC 필터 적용/미적용 둘 다 봄.
+  같은 방식·같은 종목은 24시간 안에 다시 기록하지 않음.
+
+성과 (신호 시점 종가 기준, 1h 봉으로 계산)
+  r4 / r24 / r72 : 4·24·72시간 뒤 수익률,  mfe / mae : 72시간 안 최대 상승 / 최대 하락
+  trade : 손절 -8% / 익절 +15% / 72시간 청산, 수수료 0.2% 차감 (같은 봉에서 둘 다 닿으면 손절)
+  hit30 : 72시간 안에 +30% 이상 찍었는지
+
+사용
+  python analyzer/tracker.py scan                         # 지금 스캔(바이낸스 API) → 신호 기록 + 지난 신호 성과 갱신
+  python analyzer/tracker.py backfill --days 60 --every 4 # 과거 60일을 4시간마다 스캔한 것처럼 채움 (공개 아카이브)
+  python analyzer/tracker.py update                       # 성과만 갱신
+  python analyzer/tracker.py report                       # 방식별 비교표 (analyzer/out/compare.md)
+DB: analyzer/data/tracker.db (SQLite). 웹 대시보드의 '6가지 비교' 탭이 이 DB 를 읽음.
+"""
+from __future__ import annotations
+
+import argparse, json, os, random, sqlite3, sys, time
+from concurrent.futures import ThreadPoolExecutor
+
+import numpy as np
+import pandas as pd
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import pattern_scan as ps  # noqa: E402
+
+DB = os.path.join(HERE, "data", "tracker.db")
+METHODS = {"M0": "무작위 (기준선)", "M1": "급등 차트 유사", "M2": "횡보 + 거래량 증가", "M3": "이평선 골든크로스",
+           "M4": "RSI 과매도 반등", "M5": "펀딩+OI 숏스퀴즈", "M6": "BTC 대비 상대강도"}
+CAP, CAP_M1 = 10, 5
+HOLD, SL, TP, FEE = 72, 0.08, 0.15, 0.002
+DEDUP_H = 24
+
+
+# ------------------------------------------------------------------ DB
+def db():
+    os.makedirs(os.path.dirname(DB), exist_ok=True)
+    c = sqlite3.connect(DB)
+    c.execute("""CREATE TABLE IF NOT EXISTS signals(
+        id INTEGER PRIMARY KEY, source TEXT, scan_t TEXT, method TEXT, sub TEXT, symbol TEXT,
+        price REAL, score REAL, btc_ok INTEGER, detail TEXT,
+        r4 REAL, r24 REAL, r72 REAL, mfe REAL, mae REAL, trade REAL, hit30 INTEGER, bars INTEGER DEFAULT 0,
+        UNIQUE(source, method, symbol, scan_t))""")
+    c.execute("CREATE INDEX IF NOT EXISTS ix_sig ON signals(source, method, symbol, scan_t)")
+    return c
+
+
+def _grp(source):
+    """중복 판정/비교 그룹: 실시간(api)과 과거 채움(backfill/archive)을 섞지 않음."""
+    return ("api",) if source == "api" else ("archive", "backfill")
+
+
+def record(con, source, t, sigs):
+    ts = str(t)
+    lo = str(t - pd.Timedelta(hours=DEDUP_H))
+    g = _grp(source)
+    n = 0
+    for s in sigs:
+        q = f"SELECT 1 FROM signals WHERE method=? AND symbol=? AND scan_t>? AND scan_t<? AND source IN ({','.join('?' * len(g))})"
+        if con.execute(q, (s["method"], s["symbol"], lo, ts, *g)).fetchone():
+            continue
+        cur = con.execute("INSERT OR IGNORE INTO signals(source,scan_t,method,sub,symbol,price,score,btc_ok,detail) VALUES(?,?,?,?,?,?,?,?,?)",
+                          (source, ts, s["method"], s.get("sub", ""), s["symbol"], float(s["price"]),
+                           None if s.get("score") is None else float(s["score"]), int(s["btc_ok"]),
+                           json.dumps(ps._clean(s.get("detail", {})), ensure_ascii=False)))
+        n += cur.rowcount
+    con.commit()
+    return n
+
+
+# ------------------------------------------------------------------ 방식
+def ema(s, n):
+    return s.ewm(span=n, adjust=False).mean()
+
+
+def btc_state(btc):
+    """btc_ok = 전일까지의 일봉 종가 > 20일 SMA, m6_ok = 7일 고점 대비 -3% 이하로 눌렸다가 1h EMA20 위."""
+    now = btc.index[-1] + pd.Timedelta(hours=1)
+    d = btc.c[btc.index < now.normalize()].resample("1D").last().dropna()
+    ok = bool(len(d) >= 21 and d.iloc[-1] > d.iloc[-20:].mean())
+    hi7 = btc.h.iloc[-168:].max()
+    dd = btc.c.iloc[-1] / hi7 - 1
+    m6 = bool(btc.l.iloc[-168:].min() / hi7 - 1 <= -0.03 and btc.c.iloc[-1] > ema(btc.c, 20).iloc[-1])
+    return ok, m6, dd
+
+
+def sig(method, s, score, sub="", **detail):
+    k = s["_k"]["1h"]
+    return dict(method=method, symbol=s["symbol"], price=float(k.c.iloc[-1]), score=score, sub=sub, detail=detail)
+
+
+def m1(patterns, snaps):
+    if not patterns:
+        return [], []
+    fr = pd.DataFrame([s["feat"] for s in snaps])
+    fscale = {f: float(fr[f].std()) for f in ps.FEATS if f in fr and fr[f].notna().sum() > 10}
+    rows = []
+    for s in snaps:
+        best = max(((ps.similarity(p, s, fscale), p) for p in patterns), key=lambda x: x[0][0])
+        (sc, shp, fs, per), p = best
+        rows.append((sc, shp, fs, per, p, s))
+    rows.sort(key=lambda x: -x[0])
+    out = [sig("M1", s, sc, like=p["symbol"], like_launch=p["launch"], shape=shp, feat=fs, **{f"corr_{k}": v for k, v in per.items()})
+           for sc, shp, fs, per, p, s in rows[:CAP_M1]]
+    return out, rows
+
+
+def m2(snaps, a):
+    k1s = {s["symbol"]: s["_k"]["1h"] for s in snaps}
+    allr, sel = ps.range_scan(k1s, a.range_hours, a.recent, a.vol_mult, a.max_chg)
+    by = {s["symbol"]: s for s in snaps}
+    out = []
+    if len(sel):
+        sel = sel[~sel.below].sort_values("vol_ratio", ascending=False).head(CAP)
+        out = [sig("M2", by[r.symbol], r.vol_ratio, sub=r.box, range_pct=r.range_pct, vol_ratio=r.vol_ratio,
+                   breakout=r.breakout, move_recent=r.move_recent) for r in sel.itertuples()]
+    return out, allr, sel
+
+
+def m3(snaps):
+    out = []
+    for s in snaps:
+        c = s["_k"]["1h"].c
+        e20, e50, e200 = ema(c, 20), ema(c, 50), ema(c, 200)
+        d = (e20 - e50).values
+        if d[-1] > 0 and (d[-5:-1] <= 0).any() and c.iloc[-1] > e200.iloc[-1]:
+            out.append(sig("M3", s, float(c.iloc[-1] / e200.iloc[-1] - 1), above_ema200=float(c.iloc[-1] / e200.iloc[-1] - 1)))
+    return sorted(out, key=lambda x: -x["score"])[:CAP]
+
+
+def m4(snaps):
+    out = []
+    for s in snaps:
+        k = s["_k"]["1h"]
+        r = ps.rsi(k.c).values
+        if not (r[-1] >= 30 and np.nanmin(r[-4:-1]) < 30):
+            continue
+        l = k.l.values
+        i1 = len(l) - 12 + int(np.argmin(l[-12:]))
+        i0 = len(l) - 48 + int(np.argmin(l[-48:-12]))
+        div = bool(l[i1] < l[i0] and r[i1] > r[i0])
+        out.append(sig("M4", s, float(-np.nanmin(r[-4:-1])), sub="div" if div else "os", rsi_min=float(np.nanmin(r[-4:-1])), div=div))
+    return sorted(out, key=lambda x: (x["sub"] != "div", -x["score"]))[:CAP]
+
+
+def m5(snaps, src):
+    out = []
+    for s in snaps:
+        f = s["feat"]
+        fu = f.get("funding")
+        if not (f["ret_7d"] is not None and f["ret_7d"] <= -0.15 and -0.12 <= f["ret_24h"] <= 0.03
+                and fu is not None and np.isfinite(fu) and fu <= 0):
+            continue
+        oi = f.get("oi_chg_24h")
+        if oi is None or not np.isfinite(oi):
+            if hasattr(src, "oi_allow"):
+                src.oi_allow.add(s["symbol"])
+            oi = src.oi_chg(s["symbol"], int(pd.Timestamp(s["t"]).value // 1_000_000))
+        if oi is not None and np.isfinite(oi) and oi >= 0.10:
+            out.append(sig("M5", s, float(oi), oi_chg_24h=float(oi), funding=float(fu), ret_7d=f["ret_7d"]))
+    return sorted(out, key=lambda x: -x["score"])[:CAP]
+
+
+def m6(snaps, btc, m6_ok):
+    if not m6_ok:
+        return []
+    bc = btc.c
+    b7 = bc.iloc[-1] / bc.iloc[-169] - 1
+    out = []
+    for s in snaps:
+        c = s["_k"]["1h"].c
+        ratio = (c / bc.reindex(c.index)).dropna()
+        if len(ratio) < 169 or not np.isfinite(s["feat"]["ret_7d"]):
+            continue
+        near = ratio.iloc[-1] / ratio.iloc[-168:].max()
+        rs7 = s["feat"]["ret_7d"] - b7
+        if near >= 0.97 and rs7 >= 0.10:
+            out.append(sig("M6", s, float(rs7), rs7=float(rs7), ratio_vs_7d_high=float(near)))
+    return sorted(out, key=lambda x: -x["score"])[:CAP]
+
+
+def m0(snaps, t):
+    rnd = random.Random(int(pd.Timestamp(t).value // 3_600_000_000_000))
+    pick = rnd.sample(snaps, min(CAP, len(snaps)))
+    return [sig("M0", s, None) for s in pick]
+
+
+# ------------------------------------------------------------------ 스캔 1회
+def run_scan(src, a, source, charts=True, quiet=False, report=True):
+    say = (lambda *x: None) if quiet else (lambda *x: print(*x, flush=True))
+    t_ms = src.now()
+    now = pd.Timestamp(t_ms, unit="ms")
+    uni = src.universe()
+    uni = uni[(uni.qv24 >= a.min_qv) & ~uni.symbol.isin(ps.NOT_COIN)]
+    top = uni.sort_values("chg24", ascending=False).head(a.top)
+    btc = src.klines("BTCUSDT", "1h", 600)
+    btc_ok, m6_ok, btc_dd = btc_state(btc)
+    say(f"기준 시각(UTC) {now}  소스 {source}  BTC 20일선 위={btc_ok}  BTC 7일고점대비 {btc_dd:+.1%}")
+    say("상승 상위:", ", ".join(f"{r.symbol} {r.chg24:+.1%}" for r in top.itertuples()))
+
+    patterns = []
+    for r in top.itertuples():
+        k1 = src.klines(r.symbol, "1h", ps.NEED["1h"])
+        if k1 is None or len(k1) < a.lookback + 10:
+            continue
+        tl, tp, gain, gl = ps.find_launch(k1, a.lookback, a.launch_frac)
+        end = int(tl.value // 1_000_000)
+        if hasattr(src, "oi_allow"):
+            src.oi_allow.add(r.symbol)
+        snap = ps.snapshot(src, r.symbol, end)
+        if snap is None:
+            continue
+        snap.update(kind="pump", launch=str(tl), peak=str(tp), gain=round(gain, 4), gain_from_low=round(gl, 4),
+                    chg24=round(r.chg24, 4), recorded=str(now))
+        if charts:
+            after = {iv: src.klines(r.symbol, iv, ps.WIN[iv], min(end + ps.WIN[iv] * ps.MS[iv], t_ms)) for iv in ps.WIN}
+            after = {iv: (k[k.index >= tl] if k is not None else None) for iv, k in after.items()}
+            png = os.path.join(ps.PAT_DIR, f"{tl:%Y%m%d_%H%M}_{r.symbol}.png")
+            os.makedirs(ps.PAT_DIR, exist_ok=True)
+            ps.plot_pattern(snap, png, f"{r.symbol} pump pattern  launch {tl:%m-%d %H:%M} -> peak {tp:%m-%d %H:%M}  +{gain:.0%}",
+                            launch=True, after=after)
+            snap["png"] = os.path.relpath(png, ps.ROOT).replace(os.sep, "/")
+        patterns.append(snap)
+
+    if source != "backfill":
+        lib = os.path.join(ps.PAT_DIR, "library.jsonl")
+        os.makedirs(ps.PAT_DIR, exist_ok=True)
+        seen = {(p["symbol"], p["launch"]) for p in map(json.loads, open(lib, encoding="utf-8"))} if os.path.exists(lib) else set()
+        with open(lib, "a", encoding="utf-8") as fh:
+            for p in patterns:
+                if (p["symbol"], p["launch"]) not in seen:
+                    fh.write(json.dumps({k: v for k, v in p.items() if not k.startswith("_")}, ensure_ascii=False) + "\n")
+        if a.library and os.path.exists(lib):
+            keys = {(p["symbol"], p["launch"]) for p in patterns}
+            patterns_cmp = patterns + [p for p in map(json.loads, open(lib, encoding="utf-8")) if (p["symbol"], p["launch"]) not in keys]
+        else:
+            patterns_cmp = patterns
+    else:
+        patterns_cmp = patterns
+
+    cand = uni[~uni.symbol.isin(set(top.symbol)) & (uni.chg24 < a.max_chg)].symbol.tolist()
+    say(f"후보 {len(cand)}종목 차트 수집…")
+    with ThreadPoolExecutor(a.workers) as ex:
+        snaps = [s for s in ex.map(lambda s: ps._safe(ps.snapshot, src, s), cand) if s is not None]
+    snaps = [s for s in snaps if len(s["_k"]["1h"]) >= 24 * 8]
+
+    s1, rows1 = m1(patterns_cmp, snaps)
+    s2, allr, sel2 = m2(snaps, a)
+    sigs = s1 + s2 + m3(snaps) + m4(snaps) + m5(snaps, src) + m6(snaps, btc, m6_ok) + m0(snaps, now)
+    for s in sigs:
+        s["btc_ok"] = btc_ok
+    cnt = {m: sum(1 for s in sigs if s["method"] == m) for m in METHODS}
+    say("신호:", ", ".join(f"{m} {cnt[m]}" for m in METHODS))
+
+    if report:
+        stamp = base = now.strftime("%Y%m%d_%H%M")
+        i = 1
+        while os.path.exists(os.path.join(ps.OUT_DIR, f"run_{stamp}.json")):
+            i += 1; stamp = f"{base}_{i}"
+        os.makedirs(ps.OUT_DIR, exist_ok=True)
+        a.mode = "all6"
+        rep = ps.new_report(a, now, stamp, top)
+        rep["source"] = source
+        rep["btc_ok"] = btc_ok
+        rep["patterns"] = [dict(symbol=p["symbol"], chg24=p["chg24"], launch=p["launch"], peak=p["peak"], gain=p["gain"],
+                                gain_from_low=p.get("gain_from_low"), png=p.get("png"), feat=ps._clean(p["feat"])) for p in patterns]
+        cands = []
+        for j, (sc, shp, fs, per, p, s) in enumerate(rows1[: a.pick]):
+            r = dict(symbol=s["symbol"], score=round(sc, 3), shape=round(shp, 3), feat=round(fs, 3), like=p["symbol"],
+                     like_launch=p["launch"], corr_4h=per["4h"], corr_1h=per["1h"], corr_15m=per["15m"], **ps._clean(s["feat"]))
+            if charts and j < a.charts:
+                png = os.path.join(ps.OUT_DIR, f"scan_{stamp}_{s['symbol']}.png")
+                ps.plot_pattern(s, png, f"{s['symbol']} now  score {sc:.2f}  (similar to {p['symbol']} launch {p['launch'][5:16]})")
+                r["png"] = os.path.relpath(png, ps.ROOT).replace(os.sep, "/")
+            cands.append(r)
+        rep["candidates"] = cands
+        rep["n_candidates_scanned"] = len(snaps)
+        rows = [ps._clean(r) for r in allr.to_dict("records")] if len(allr) else []
+        for r in rows:
+            r["selected"] = bool(r["vol_ratio"] >= a.vol_mult and abs(r["move_recent"]) < a.max_chg)
+        rep["range"] = dict(hours=a.range_hours, recent=a.recent, vol_mult=a.vol_mult,
+                            n3=int((allr.box == "3%").sum()) if len(allr) else 0, n5=len(allr), rows=rows)
+        rep["signals"] = [dict(method=s["method"], sub=s["sub"], symbol=s["symbol"], price=s["price"],
+                               score=s["score"], detail=ps._clean(s["detail"])) for s in sigs]
+        ps.save_report(rep, stamp)
+    return now, sigs
+
+
+# ------------------------------------------------------------------ 성과
+def outcome(k, p0):
+    """k: 신호 이후 1h 봉 (첫 봉 = 신호 시각에 열린 봉)."""
+    k = k.iloc[:HOLD]
+    n = len(k)
+    if n == 0:
+        return None
+    h, l, c = k.h.values, k.l.values, k.c.values
+    res = dict(bars=n, r4=c[3] / p0 - 1 if n >= 4 else None, r24=c[23] / p0 - 1 if n >= 24 else None,
+               r72=c[71] / p0 - 1 if n >= 72 else None, mfe=h.max() / p0 - 1, mae=l.min() / p0 - 1)
+    tr = None
+    for i in range(n):
+        if l[i] <= p0 * (1 - SL):
+            tr = -SL; break
+        if h[i] >= p0 * (1 + TP):
+            tr = TP; break
+    if tr is None and n >= HOLD:
+        tr = c[-1] / p0 - 1
+    res["trade"] = None if tr is None else tr - FEE
+    res["hit30"] = 1 if res["mfe"] >= 0.30 else (0 if n >= HOLD else None)
+    return res
+
+
+def update(con, src, source):
+    g = _grp(source)
+    now = pd.Timestamp(src.now(), unit="ms")
+    q = f"SELECT id, symbol, scan_t, price FROM signals WHERE bars < {HOLD} AND source IN ({','.join('?' * len(g))}) AND scan_t <= ?"
+    rows = pd.DataFrame(con.execute(q, (*g, str(now - pd.Timedelta(hours=4)))).fetchall(), columns=["id", "symbol", "scan_t", "price"])
+    if rows.empty:
+        return 0
+    rows["t"] = pd.to_datetime(rows.scan_t)
+
+    def one(sym):
+        r = rows[rows.symbol == sym]
+        k = src.klines_since(sym, int(r.t.min().value // 1_000_000))
+        out = []
+        if k is None or k.empty:
+            return out
+        for x in r.itertuples():
+            res = outcome(k[k.index >= x.t], x.price)
+            if res:
+                out.append((x.id, res))
+        return out
+
+    with ThreadPoolExecutor(8) as ex:
+        allres = [y for ys in ex.map(lambda s: ps._safe(one, s) or [], rows.symbol.unique()) for y in ys]
+    for i, r in allres:
+        con.execute("UPDATE signals SET bars=?, r4=?, r24=?, r72=?, mfe=?, mae=?, trade=?, hit30=? WHERE id=?",
+                    (r["bars"], r["r4"], r["r24"], r["r72"], r["mfe"], r["mae"], r["trade"], r["hit30"], i))
+    con.commit()
+    return len(allres)
+
+
+# ------------------------------------------------------------------ 비교
+def load(con, group="backfill"):
+    g = _grp(group)
+    return pd.read_sql_query(f"SELECT * FROM signals WHERE source IN ({','.join('?' * len(g))})", con, params=g)
+
+
+def compare(df, btc_only=False):
+    if df.empty:
+        return []
+    if btc_only:
+        df = df[df.btc_ok == 1]
+    base = df[(df.method == "M0") & df.r72.notna()]
+    b72 = base.r72.mean() if len(base) else np.nan
+    out = []
+    for m, name in METHODS.items():
+        for sub in [None] + sorted(x for x in df[df.method == m]["sub"].dropna().unique() if x):
+            d = df[(df.method == m) & ((df["sub"] == sub) if sub else True)]
+            d72 = d[d.r72.notna()]
+            dt = d[d.trade.notna()]
+            out.append(dict(method=m, name=name, sub=sub or "", n=len(d), n72=len(d72),
+                            scans=int(d.scan_t.nunique()),
+                            r4=_m(d.r4), r24=_m(d.r24), r72=_m(d72.r72), r72_med=_md(d72.r72),
+                            win72=_m(d72.r72 > 0) if len(d72) else None, excess72=(_m(d72.r72) - b72) if len(d72) and np.isfinite(b72) else None,
+                            trade=_m(dt.trade), trade_win=_m(dt.trade > 0) if len(dt) else None,
+                            trade_sum=float(dt.trade.sum()) if len(dt) else None,
+                            hit30=_m(d.hit30.dropna()), mfe_med=_md(d72.mfe), mae_med=_md(d72.mae)))
+    return out
+
+
+def _m(s):
+    s = pd.Series(s).dropna().astype(float)
+    return float(s.mean()) if len(s) else None
+
+
+def _md(s):
+    s = pd.Series(s).dropna().astype(float)
+    return float(s.median()) if len(s) else None
+
+
+def write_compare(con, group):
+    df = load(con, group)
+    L = [f"# 6가지 방식 비교 ({'실시간' if group == 'api' else '과거 채움'} 데이터)", ""]
+    if df.empty:
+        L.append("신호 없음")
+    else:
+        L += [f"기간 {df.scan_t.min()[:16]} ~ {df.scan_t.max()[:16]} UTC, 스캔 {df.scan_t.nunique()}회, 신호 {len(df)}건. "
+              f"성과는 신호 시점 종가 기준, 거래 = 손절 -8% / 익절 +15% / 72h, 수수료 0.2%.", ""]
+        for bo in (False, True):
+            L += [f"## {'BTC 20일선 위일 때만' if bo else '전체'}", "",
+                  "| 방식 | 세부 | 신호 | 72h 완료 | 24h 평균 | 72h 평균 | 72h 중앙 | 72h 승률 | 기준선 대비 | 거래 평균 | 거래 승률 | +30% 도달 | MFE 중앙 | MAE 중앙 |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+            for r in compare(df, bo):
+                L.append(f"| {r['method']} {r['name']} | {r['sub']} | {r['n']} | {r['n72']} | {_p(r['r24'])} | {_p(r['r72'])} | {_p(r['r72_med'])} | "
+                         f"{_p(r['win72'], 0, False)} | {_p(r['excess72'])} | {_p(r['trade'])} | {_p(r['trade_win'], 0, False)} | "
+                         f"{_p(r['hit30'], 1, False)} | {_p(r['mfe_med'])} | {_p(r['mae_med'])} |")
+            L.append("")
+    path = os.path.join(ps.OUT_DIR, f"compare_{group}.md")
+    os.makedirs(ps.OUT_DIR, exist_ok=True)
+    open(path, "w", encoding="utf-8").write("\n".join(L))
+    print("\n".join(L))
+    print("저장:", os.path.relpath(path, ps.ROOT))
+
+
+def _p(v, d=1, sign=True):
+    if v is None or (isinstance(v, float) and not np.isfinite(v)):
+        return "–"
+    return f"{v*100:+.{d}f}%" if sign else f"{v*100:.{d}f}%"
+
+
+# ------------------------------------------------------------------ 과거 채움 (아카이브)
+class Backfill(ps.Archive):
+    """공개 아카이브 데이터를 한 번에 메모리에 올려 두고, 시각 t 를 옮겨 가며 '그때의 지금' 으로 스캔."""
+
+    def __init__(self, start, end, workers=32):
+        super().__init__()
+        rb = self.rb
+        self.t = pd.Timestamp(end)
+        self.oi_allow = set()
+        lo = pd.Timestamp(start) - pd.Timedelta(days=30)
+        syms = [s for s in rb.list_symbols() if s not in ps.NOT_COIN]
+        print(f"아카이브 1h 로드 ({len(syms)}종목)…", flush=True)
+        self.h1, self.h4, self.m15, self.fund = {}, {}, {}, {}
+
+        def load1(s):
+            path = os.path.join(rb.H1_DIR, f"{s}.npz")
+            if not os.path.exists(path):
+                return s, None, None
+            k, f = rb.load_1h(s)
+            k = k[(k.index >= lo) & (k.qv > 0)].drop(columns="tqv")
+            return s, k, f
+
+        with ThreadPoolExecutor(workers) as ex:
+            for s, k, f in ex.map(load1, syms):
+                if k is not None and len(k) and k.index[-1] >= pd.Timestamp(start) and k.index[0] <= pd.Timestamp(end):
+                    self.h1[s], self.fund[s] = k, f
+        missing = [s for s in syms if s not in self.h1 and not os.path.exists(os.path.join(rb.H1_DIR, f"{s}.npz"))]
+        if missing:
+            print(f"  1h 캐시 없는 종목 {len(missing)}개는 건너뜀 (먼저 backtest/regime_bt.py fetch 실행 시 포함)", flush=True)
+        for s, k in self.h1.items():
+            self.h4[s] = k.resample("4h").agg({"o": "first", "h": "max", "l": "min", "c": "last", "v": "sum", "qv": "sum"}).dropna()
+        days = pd.date_range((pd.Timestamp(start) - pd.Timedelta(days=1)).normalize(), pd.Timestamp(end).normalize())
+        print(f"15m 로드 ({len(self.h1)}종목 × {len(days)}일, 처음엔 다운로드로 오래 걸림)…", flush=True)
+
+        def load15(s):
+            k = rb.load_15m(s, days)
+            return s, (k.drop(columns="tqv") if k is not None else None)
+
+        done = 0
+        with ThreadPoolExecutor(workers) as ex:
+            for s, k in ex.map(load15, list(self.h1)):
+                if k is not None:
+                    self.m15[s] = k
+                done += 1
+                if done % 100 == 0:
+                    print(f"  15m {done}/{len(self.h1)}", flush=True)
+
+    def set(self, t):
+        self.t = pd.Timestamp(t)
+        self.oi_allow = set()
+
+    def now(self):
+        return int(self.t.value // 1_000_000)
+
+    def _frame(self, sym, iv):
+        return {"1h": self.h1, "4h": self.h4, "15m": self.m15}[iv].get(sym)
+
+    def klines(self, sym, iv, limit, end_ms=None):
+        f = self._frame(sym, iv)
+        if f is None:
+            return None
+        end = pd.Timestamp(end_ms or self.now(), unit="ms") - pd.Timedelta(milliseconds=ps.MS[iv])
+        i = f.index.searchsorted(end, side="right")
+        return f.iloc[max(0, i - limit):i]
+
+    def klines_since(self, sym, start_ms):
+        f = self.h1.get(sym)
+        if f is None:
+            return None
+        return f[(f.index >= pd.Timestamp(start_ms, unit="ms")) & (f.index + pd.Timedelta(hours=1) <= self.t)]
+
+    def universe(self):
+        rows = []
+        last = self.t - pd.Timedelta(hours=1)
+        for s, k in self.h1.items():
+            i = k.index.searchsorted(last, side="right")
+            if i < 25 or k.index[i - 1] != last:
+                continue
+            w = k.iloc[i - 25:i]
+            rows.append(dict(symbol=s, chg24=w.c.iloc[-1] / w.c.iloc[0] - 1, qv24=w.qv.iloc[1:].sum()))
+        return pd.DataFrame(rows)
+
+    def funding(self, sym, end_ms=None):
+        f = self.fund.get(sym)
+        if f is None or not len(f):
+            return np.nan
+        f = f[f.index <= pd.Timestamp(end_ms or self.now(), unit="ms")]
+        return float(f.iloc[-1]) if len(f) else np.nan
+
+    def oi_chg(self, sym, end_ms=None):
+        if sym not in self.oi_allow:
+            return np.nan
+        return super().oi_chg(sym, end_ms)
+
+
+# ------------------------------------------------------------------ CLI
+def add_klines_since():
+    """실시간/아카이브 소스에 '신호 이후 1h 봉' 조회 추가."""
+    def api_since(self, sym, start_ms):
+        d = self._get("/fapi/v1/klines", symbol=sym, interval="1h", startTime=int(start_ms), limit=1000)
+        if not d:
+            return None
+        k = pd.DataFrame([[float(x[0]), *map(float, x[1:6]), float(x[7]), float(x[6])] for x in d],
+                         columns=["ts", "o", "h", "l", "c", "v", "qv", "ct"])
+        k = k[k.ct < self.now()]
+        k.index = pd.to_datetime(k.pop("ts").astype("int64"), unit="ms")
+        return k.drop(columns="ct")
+
+    def arc_since(self, sym, start_ms):
+        k, _ = self._h1(sym)
+        if k is None:
+            return None
+        return k[(k.index >= pd.Timestamp(start_ms, unit="ms")) & (k.index + pd.Timedelta(hours=1) <= self.end)]
+
+    ps.BinanceAPI.klines_since = api_since
+    ps.Archive.klines_since = arc_since
+
+
+def main():
+    ap = argparse.ArgumentParser(description="6가지 방식 신호 기록 / 성과 추적 / 비교")
+    ap.add_argument("cmd", choices=["scan", "update", "backfill", "report"])
+    ap.add_argument("--source", choices=["api", "archive"], default="api")
+    ap.add_argument("--days", type=int, default=60, help="backfill: 과거 며칠")
+    ap.add_argument("--every", type=int, default=4, help="backfill: 몇 시간마다 스캔")
+    ap.add_argument("--end", default="", help="backfill: 마지막 시각 (기본 아카이브 마지막 날 다음 0시)")
+    ap.add_argument("--group", choices=["api", "backfill"], default="", help="report: 실시간/과거 채움 중 어느 데이터")
+    for k, v, t in [("top", 5, int), ("lookback", 72, int), ("launch-frac", 0.25, float), ("pick", 20, int), ("charts", 10, int),
+                    ("min-qv", 2e6, float), ("max-chg", 0.15, float), ("range-hours", 24, int), ("recent", 4, int),
+                    ("vol-mult", 2.0, float), ("workers", 8, int)]:
+        ap.add_argument("--" + k, type=t, default=v)
+    ap.add_argument("--library", action="store_true")
+    ap.add_argument("--mode", default="all6")
+    a = ap.parse_args()
+    add_klines_since()
+    ps.setup_fonts()
+    con = db()
+
+    if a.cmd == "scan":
+        src = ps.BinanceAPI() if a.source == "api" else ps.Archive()
+        now, sigs = run_scan(src, a, a.source)
+        n = record(con, a.source, now, sigs)
+        print(f"신호 {n}건 기록 (24h 안 중복 제외)")
+        print(f"지난 신호 성과 갱신 {update(con, src, a.source)}건")
+        write_compare(con, "api" if a.source == "api" else "backfill")
+    elif a.cmd == "update":
+        src = ps.BinanceAPI() if a.source == "api" else ps.Archive()
+        print(f"성과 갱신 {update(con, src, a.source)}건")
+    elif a.cmd == "report":
+        write_compare(con, a.group or ("api" if a.source == "api" else "backfill"))
+    else:
+        rb_end = pd.Timestamp(__import__("regime_bt").archive_end()) + pd.Timedelta(days=1)
+        end = pd.Timestamp(a.end) if a.end else rb_end
+        start = end - pd.Timedelta(days=a.days)
+        src = Backfill(start, end, workers=max(16, a.workers))
+        times = pd.date_range(start, end, freq=f"{a.every}h")
+        have = {r[0] for r in con.execute("SELECT DISTINCT scan_t FROM signals WHERE source='backfill'")}
+        t0 = time.time()
+        for i, t in enumerate(times):
+            if str(t) in have:
+                continue
+            src.set(t)
+            try:
+                now, sigs = run_scan(src, a, "backfill", charts=False, quiet=True, report=False)
+            except Exception as e:
+                print(f"  {t} 실패: {type(e).__name__} {e}", flush=True)
+                continue
+            n = record(con, "backfill", now, sigs)
+            el = time.time() - t0
+            print(f"  [{i+1}/{len(times)}] {t:%m-%d %H:%M} 신호 {n}  ({el/60:.1f}분 경과)", flush=True)
+        src.set(rb_end)
+        print(f"성과 계산 {update(con, src, 'backfill')}건")
+        write_compare(con, "backfill")
+
+
+if __name__ == "__main__":
+    main()
