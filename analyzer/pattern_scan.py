@@ -349,7 +349,10 @@ def main(a):
     os.makedirs(PAT_DIR, exist_ok=True); os.makedirs(OUT_DIR, exist_ok=True)
     src = BinanceAPI() if a.source == "api" else Archive()
     now = pd.Timestamp(src.now(), unit="ms")
-    stamp = now.strftime("%Y%m%d_%H%M")
+    stamp = base = now.strftime("%Y%m%d_%H%M")
+    i = 1
+    while os.path.exists(os.path.join(OUT_DIR, f"run_{stamp}.json")):   # 같은 분에 여러 번 실행해도 덮어쓰지 않음
+        i += 1; stamp = f"{base}_{i}"
     print(f"기준 시각(UTC) {now}  소스 {a.source}", flush=True)
 
     uni = src.universe()
@@ -359,7 +362,9 @@ def main(a):
 
     if a.mode == "range":
         k1s = fetch_1h(src, uni.symbol.tolist(), a.workers)
-        do_range(a, k1s, now, stamp, uni)
+        report = new_report(a, now, stamp, top)
+        report["range"] = do_range(a, k1s, now, stamp, uni)
+        save_report(report, stamp)
         return
 
     # 1~3) 상위 종목: launch 직전 패턴 기록
@@ -436,6 +441,19 @@ def main(a):
         plot_pattern(by[r.symbol], os.path.join(OUT_DIR, f"scan_{stamp}_{r.symbol}.png"),
                      f"{r.symbol} now  score {r.score:.2f}  (similar to {r.like} launch {r.like_launch[5:16]})")
     write_md(os.path.join(OUT_DIR, f"scan_{stamp}.md"), now, a, top, patterns, pick, stamp)
+    report = new_report(a, now, stamp, top)
+    report["patterns"] = [dict(symbol=p["symbol"], chg24=p["chg24"], launch=p["launch"], peak=p["peak"],
+                               gain=p["gain"], gain_from_low=p.get("gain_from_low"), png=p.get("png"), feat=_clean(p["feat"]))
+                          for p in patterns if p.get("recorded") == str(now)]
+    report["library_size"] = sum(1 for _ in open(lib_path, encoding="utf-8")) if os.path.exists(lib_path) else 0
+    cands = []
+    for i, r in enumerate(pick.to_dict("records")):
+        r = _clean(r)
+        png = os.path.join(OUT_DIR, f"scan_{stamp}_{r['symbol']}.png")
+        r["png"] = os.path.relpath(png, ROOT) if os.path.exists(png) else None
+        cands.append(r)
+    report["candidates"] = cands
+    report["n_candidates_scanned"] = len(res)
     print(f"\n유사 차트 상위 {a.pick}:")
     print(pick[["symbol", "score", "shape", "feat", "like", "corr_4h", "corr_1h", "corr_15m",
                 "ret_7d", "off_high_30d", "rsi_1h", "vol_ratio_8h", "oi_chg_24h"]].to_string(index=False))
@@ -444,7 +462,35 @@ def main(a):
     if a.mode == "both":
         k1s = {s["symbol"]: s["_k"]["1h"] for s in snaps}
         k1s.update(fetch_1h(src, list(excl), a.workers))
-        do_range(a, k1s, now, stamp, uni)
+        report["range"] = do_range(a, k1s, now, stamp, uni)
+    save_report(report, stamp)
+
+
+def _clean(d):
+    out = {}
+    for k, v in d.items():
+        if isinstance(v, (np.floating, float)):
+            v = float(v) if np.isfinite(v) else None
+        elif isinstance(v, (np.integer,)):
+            v = int(v)
+        elif isinstance(v, np.bool_):
+            v = bool(v)
+        out[k] = v
+    return out
+
+
+def new_report(a, now, stamp, top):
+    return dict(stamp=stamp, time=str(now), source=a.source, mode=a.mode,
+                params={k: v for k, v in vars(a).items()},
+                top=[_clean(r) for r in top[["symbol", "chg24", "qv24"]].to_dict("records")],
+                patterns=[], candidates=[], range=None)
+
+
+def save_report(report, stamp):
+    """웹 대시보드(analyzer/web.py)가 읽는 실행 결과."""
+    path = os.path.join(OUT_DIR, f"run_{stamp}.json")
+    json.dump(report, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1, default=str)
+    print(f"저장: {os.path.relpath(path, ROOT)}")
 
 
 def fetch_1h(src, syms, workers):
@@ -475,6 +521,11 @@ def do_range(a, k1s, now, stamp, uni):
         L.append("")
     open(os.path.join(OUT_DIR, f"range_{stamp}.md"), "w", encoding="utf-8").write("\n".join(L))
     print(f"저장: analyzer/out/range_{stamp}.md (.csv)")
+    rows = [_clean(r) for r in allr.to_dict("records")] if len(allr) else []
+    for r in rows:
+        r["selected"] = bool(r["vol_ratio"] >= a.vol_mult and abs(r["move_recent"]) < a.max_chg)
+    return dict(hours=a.range_hours, recent=a.recent, vol_mult=a.vol_mult,
+                n3=int((allr.box == "3%").sum()) if len(allr) else 0, n5=len(allr), rows=rows)
 
 
 def _safe(fn, *x):

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>코인 스캐너</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #16181d; --muted: #646b78; --line: #e3e6eb;
+  --accent: #2f6fde; --accent-ink: #ffffff; --up: #138a4c; --down: #cc3a32; --warn: #b26a00;
+  --chip: #eef1f6; --hover: #f2f5fa; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --panel: #171a20; --ink: #e8eaee; --muted: #9aa2b1; --line: #2a2f38;
+    --accent: #5b8ff0; --accent-ink: #0b0d10; --up: #35c27a; --down: #f0675e; --warn: #e0a33a;
+    --chip: #222731; --hover: #1d2129; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --panel: #171a20; --ink: #e8eaee; --muted: #9aa2b1; --line: #2a2f38;
+  --accent: #5b8ff0; --accent-ink: #0b0d10; --up: #35c27a; --down: #f0675e; --warn: #e0a33a;
+  --chip: #222731; --hover: #1d2129; --shadow: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 20px;
+  background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 17px; margin: 0 12px 0 0; }
+.muted { color: var(--muted); }
+select, input, button { font: inherit; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+button { cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button:disabled { opacity: .55; cursor: default; }
+main { max-width: 1280px; margin: 0 auto; padding: 18px 20px 60px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  padding: 16px; margin-bottom: 16px; }
+.controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 14px; align-items: end; }
+.controls label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.controls label.check { flex-direction: row; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); white-space: nowrap; min-height: 33px; }
+.controls label.check input[type=checkbox] { width: auto; margin: 0; }
+.controls input, .controls select { width: 100%; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+pre.log { background: var(--chip); border-radius: 6px; padding: 10px; font-size: 12px; max-height: 220px; overflow: auto;
+  white-space: pre-wrap; margin: 10px 0 0; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; overflow-x: auto; }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 9px 14px;
+  color: var(--muted); white-space: nowrap; }
+.tabs button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--muted); }
+.tw { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 9px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--panel); }
+th:first-child, td:first-child, th.l, td.l { text-align: left; }
+tbody tr:hover { background: var(--hover); }
+tr.click { cursor: pointer; }
+.up { color: var(--up); } .down { color: var(--down); }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--chip); font-size: 12px; }
+.chip.go { background: color-mix(in srgb, var(--up) 18%, transparent); color: var(--up); }
+.chip.bad { background: color-mix(in srgb, var(--down) 18%, transparent); color: var(--down); }
+.bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--accent); vertical-align: middle; margin-left: 6px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.card img { width: 100%; display: block; cursor: zoom-in; background: #fff; }
+.card .meta { padding: 10px 12px; font-size: 13px; }
+.card .meta h3 { margin: 0 0 4px; font-size: 15px; }
+.kv { display: grid; grid-template-columns: auto auto; gap: 2px 10px; font-size: 12px; }
+.kv span:nth-child(odd) { color: var(--muted); }
+.kv span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+.note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.empty { padding: 30px; text-align: center; color: var(--muted); }
+#modal { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+#modal img { max-width: 100%; max-height: 100%; border-radius: 6px; background: #fff; }
+@media (max-width: 640px) { header, main { padding-left: 16px; padding-right: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>코인 스캐너</h1>
+  <label class="muted">실행 기록 <select id="runSel"></select></label>
+  <span id="runInfo" class="muted"></span>
+  <span style="flex:1"></span>
+  <button id="themeBtn" title="테마 전환">라이트/다크</button>
+</header>
+<main>
+  <section class="panel">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <h2 style="margin:0">스캔 실행</h2>
+      <span id="jobState" class="chip">대기</span>
+    </div>
+    <div class="controls">
+      <label>방식<select id="p_mode"><option value="both">둘 다</option><option value="pattern">급등 패턴 유사</option><option value="range">횡보 + 거래량</option></select></label>
+      <label>데이터<select id="p_source"><option value="api">바이낸스 API (실시간)</option><option value="archive">공개 아카이브 (1~2일 지연)</option></select></label>
+      <label>상승 상위 종목 수<input id="p_top" type="number" value="5" min="1" max="30"></label>
+      <label>후보 표시 수<input id="p_pick" type="number" value="20" min="5" max="100"></label>
+      <label>launch 탐색(h)<input id="p_lookback" type="number" value="72" min="24" max="400"></label>
+      <label>횡보 구간(h)<input id="p_range_hours" type="number" value="24" min="6" max="168"></label>
+      <label>최근 거래량 구간(h)<input id="p_recent" type="number" value="4" min="1" max="24"></label>
+      <label>거래량 배수<input id="p_vol_mult" type="number" value="2" step="0.1" min="1"></label>
+      <label class="check"><input id="p_library" type="checkbox"> 누적 패턴 전체와 비교</label>
+      <label class="check"><input id="autoRun" type="checkbox"> 자동 반복
+        <select id="autoMin" style="width:auto"><option>15</option><option selected>30</option><option>60</option></select>분</label>
+      <button id="runBtn" class="primary">스캔 실행</button>
+    </div>
+    <pre id="log" class="log" hidden></pre>
+  </section>
+
+  <div class="tabs" id="tabs">
+    <button data-t="pattern" class="on">급등 패턴 유사</button>
+    <button data-t="range">횡보 + 거래량</button>
+    <button data-t="library">패턴 기록</button>
+    <button data-t="bt">백테스트</button>
+  </div>
+  <div id="view"></div>
+</main>
+<div id="modal"><img alt=""></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const pct = (v, d = 1) => v == null ? "–" : (v >= 0 ? "+" : "") + (v * 100).toFixed(d) + "%";
+const cls = v => v == null ? "" : v > 0 ? "up" : v < 0 ? "down" : "";
+const num = (v, d = 2) => v == null ? "–" : Number(v).toFixed(d);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const img = p => p ? "/img/" + p.replace(/^analyzer\//, "").replace(/\\/g, "/") : null;
+const money = v => v == null ? "–" : "$" + (v / 1e6).toFixed(1) + "M";
+let RUN = null, TAB = "pattern", LIB = null, BT = null;
+
+// theme
+try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+$("#themeBtn").onclick = () => {
+  const cur = document.documentElement.dataset.theme ||
+    (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const nx = cur === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = nx;
+  try { localStorage.setItem("theme", nx); } catch (e) {}
+};
+
+// modal
+$("#modal").onclick = () => $("#modal").style.display = "none";
+function zoom(src) { $("#modal img").src = src; $("#modal").style.display = "flex"; }
+
+// sortable tables
+function table(cols, rows, opts = {}) {
+  const id = "t" + Math.random().toString(36).slice(2);
+  const html = `<div class="tw"><table id="${id}"><thead><tr>${cols.map((c, i) =>
+    `<th data-i="${i}" class="${c.l ? "l" : ""}">${c.h}</th>`).join("")}</tr></thead><tbody></tbody></table></div>`;
+  setTimeout(() => {
+    const t = document.getElementById(id); if (!t) return;
+    let key = opts.sort ?? null, dir = -1;
+    const draw = () => {
+      let r = rows.slice();
+      if (key != null) r.sort((a, b) => {
+        const x = cols[key].v(a), y = cols[key].v(b);
+        if (x == null) return 1; if (y == null) return -1;
+        return (x > y ? 1 : x < y ? -1 : 0) * dir;
+      });
+      t.tBodies[0].innerHTML = r.map(x => `<tr class="${opts.click ? "click" : ""}" data-s="${esc(x.symbol)}">${cols.map(c =>
+        `<td class="${c.l ? "l" : ""} ${c.c ? c.c(x) : ""}">${c.f(x)}</td>`).join("")}</tr>`).join("") ||
+        `<tr><td colspan="${cols.length}" class="empty">없음</td></tr>`;
+      if (opts.click) t.tBodies[0].querySelectorAll("tr.click").forEach(tr => tr.onclick = () => opts.click(tr.dataset.s));
+    };
+    t.tHead.querySelectorAll("th").forEach(th => th.onclick = () => {
+      const i = +th.dataset.i; dir = key === i ? -dir : -1; key = i; draw();
+    });
+    draw();
+  });
+  return html;
+}
+
+function stats(items) {
+  return `<div class="stats">${items.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("")}</div>`;
+}
+
+function featKV(f) {
+  const L = [["7일", pct(f.ret_7d)], ["24h", pct(f.ret_24h)], ["30일 고점 대비", pct(f.off_high_30d)],
+    ["RSI(1h)", num(f.rsi_1h, 0)], ["ATR%(1h)", pct(f.atr_pct_1h, 2)], ["BB폭 순위(4h)", num(f.bbw_rank_4h)],
+    ["거래량 배수(8h)", num(f.vol_ratio_8h)], ["펀딩", f.funding == null ? "–" : (f.funding * 100).toFixed(3) + "%"],
+    ["OI 24h", pct(f.oi_chg_24h)]];
+  return `<div class="kv">${L.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join("")}</div>`;
+}
+
+function viewPattern() {
+  if (!RUN) return `<div class="panel empty">실행 기록이 없습니다. 위에서 스캔을 실행하세요.</div>`;
+  if (!RUN.patterns?.length && !RUN.candidates?.length)
+    return `<div class="panel empty">이 실행은 '횡보 + 거래량' 방식만 돌렸습니다.</div>`;
+  const pats = RUN.patterns.map(p => `<div class="card">
+      ${p.png ? `<img src="${img(p.png)}" loading="lazy" onclick="zoom(this.src)">` : ""}
+      <div class="meta"><h3>${esc(p.symbol)} <span class="up">+${(p.gain * 100).toFixed(0)}%</span></h3>
+      <div class="muted" style="margin-bottom:6px">launch ${p.launch.slice(5, 16)} → peak ${p.peak.slice(5, 16)} · 24h ${pct(p.chg24)}</div>
+      <div class="muted" style="font-size:12px;margin-bottom:4px">상승 직전 상태</div>${featKV(p.feat)}</div></div>`).join("");
+  const cols = [
+    {h: "#", v: x => x._i, f: x => x._i},
+    {h: "종목", l: 1, v: x => x.symbol, f: x => `<b>${esc(x.symbol)}</b>`},
+    {h: "점수", v: x => x.score, f: x => `${num(x.score)}<span class="bar" style="width:${Math.round(x.score * 60)}px"></span>`},
+    {h: "모양", v: x => x.shape, f: x => num(x.shape)},
+    {h: "특징", v: x => x.feat, f: x => num(x.feat)},
+    {h: "닮은 패턴", l: 1, v: x => x.like, f: x => `${esc(x.like)} <span class="muted">${(x.like_launch || "").slice(5, 10)}</span>`},
+    {h: "상관 4h", v: x => x.corr_4h, f: x => num(x.corr_4h), c: x => cls(x.corr_4h)},
+    {h: "1h", v: x => x.corr_1h, f: x => num(x.corr_1h), c: x => cls(x.corr_1h)},
+    {h: "15m", v: x => x.corr_15m, f: x => num(x.corr_15m), c: x => cls(x.corr_15m)},
+    {h: "7일", v: x => x.ret_7d, f: x => pct(x.ret_7d), c: x => cls(x.ret_7d)},
+    {h: "24h", v: x => x.ret_24h, f: x => pct(x.ret_24h), c: x => cls(x.ret_24h)},
+    {h: "30일 고점 대비", v: x => x.off_high_30d, f: x => pct(x.off_high_30d)},
+    {h: "RSI", v: x => x.rsi_1h, f: x => num(x.rsi_1h, 0)},
+    {h: "거래량 배수", v: x => x.vol_ratio_8h, f: x => num(x.vol_ratio_8h)},
+    {h: "OI 24h", v: x => x.oi_chg_24h, f: x => pct(x.oi_chg_24h), c: x => cls(x.oi_chg_24h)},
+    {h: "차트", v: x => x.png ? 1 : 0, f: x => x.png ? "보기" : ""},
+  ];
+  const rows = RUN.candidates.map((x, i) => ({...x, _i: i + 1}));
+  return stats([[RUN.patterns.length, "기록한 급등 패턴"], [RUN.n_candidates_scanned ?? "–", "비교한 후보 종목"],
+                [RUN.library_size ?? "–", "누적 패턴 수"], [RUN.top.map(t => t.symbol.replace("USDT", "")).join(" · "), "24h 상승 상위"]]) +
+    `<section class="panel"><h2>급등 종목 — 상승 직전 차트 (점선 = launch)</h2><div class="cards">${pats}</div></section>
+     <section class="panel"><h2>지금 비슷한 차트</h2>
+     ${table(cols, rows, {click: s => { const r = rows.find(x => x.symbol === s); if (r?.png) zoom(img(r.png)); }})}
+     <p class="note">점수 = 0.5×모양(4h 42봉 · 1h 48봉 · 15m 48봉 가격/거래량 경로 상관) + 0.5×특징값 근접도. 차트가 있는 행을 누르면 확대.
+     유사도는 급등 직전과 모양이 닮았다는 뜻일 뿐 급등 확률이 아닙니다.</p></section>`;
+}
+
+function viewRange() {
+  const R = RUN?.range;
+  if (!R) return `<div class="panel empty">이 실행에는 '횡보 + 거래량' 결과가 없습니다.</div>`;
+  const sel = R.rows.filter(r => r.selected);
+  const st = r => r.breakout ? `<span class="chip go">상단 돌파</span>` : r.below ? `<span class="chip bad">하단 이탈</span>` : `<span class="chip">박스 안</span>`;
+  const cols = [
+    {h: "종목", l: 1, v: x => x.symbol, f: x => `<b>${esc(x.symbol)}</b>`},
+    {h: "박스", v: x => x.box, f: x => `<span class="chip">${x.box}</span>`},
+    {h: "박스폭", v: x => x.range_pct, f: x => pct(x.range_pct, 2)},
+    {h: "거래량 배수(박스 대비)", v: x => x.vol_ratio, f: x => num(x.vol_ratio) + "x", c: x => x.vol_ratio >= R.vol_mult ? "up" : ""},
+    {h: "7일 평균 대비", v: x => x.vol_vs_7d, f: x => x.vol_vs_7d == null ? "–" : num(x.vol_vs_7d) + "x"},
+    {h: `최근 ${R.recent}h 가격`, v: x => x.move_recent, f: x => pct(x.move_recent), c: x => cls(x.move_recent)},
+    {h: "상태", v: x => x.breakout ? 2 : x.below ? 0 : 1, f: st},
+    {h: "24h 거래대금", v: x => x.qv24, f: x => money(x.qv24)},
+  ];
+  const s3 = sel.filter(r => r.box === "3%"), s5 = sel.filter(r => r.box === "5%");
+  return stats([[R.n3, `${R.hours}h 횡보 3% 이내`], [R.n5, `${R.hours}h 횡보 5% 이내 (3% 포함)`],
+                [s3.length, `3% 박스 + 거래량 ${R.vol_mult}배↑`], [s5.length, `5% 박스 + 거래량 ${R.vol_mult}배↑`]]) +
+    `<section class="panel"><h2>횡보 3% 이내 + 거래량 증가</h2>${table(cols, s3, {sort: 3})}</section>
+     <section class="panel"><h2>횡보 5% 이내 + 거래량 증가</h2>${table(cols, s5, {sort: 3})}</section>
+     <section class="panel"><h2>횡보 종목 전체 (거래량 조건 전)</h2>${table(cols, R.rows, {sort: 3})}
+     <p class="note">기준 구간 = 최근 ${R.recent}h 를 뺀 이전 ${R.hours}h (1h 봉). 거래량 배수 = 최근 ${R.recent}h 평균 / 기준 구간 평균.</p></section>`;
+}
+
+function viewLibrary() {
+  if (!LIB) { fetch("/api/library").then(r => r.json()).then(d => { LIB = d; render(); }); return `<div class="panel empty">불러오는 중…</div>`; }
+  if (!LIB.length) return `<div class="panel empty">기록된 패턴이 없습니다.</div>`;
+  const cols = [
+    {h: "기록", l: 1, v: x => x.recorded, f: x => (x.recorded || "").slice(0, 16)},
+    {h: "종목", l: 1, v: x => x.symbol, f: x => `<b>${esc(x.symbol)}</b>`},
+    {h: "launch", l: 1, v: x => x.launch, f: x => x.launch.slice(0, 16)},
+    {h: "상승", v: x => x.gain, f: x => pct(x.gain, 0), c: () => "up"},
+    {h: "7일", v: x => x.feat.ret_7d, f: x => pct(x.feat.ret_7d), c: x => cls(x.feat.ret_7d)},
+    {h: "30일 고점 대비", v: x => x.feat.off_high_30d, f: x => pct(x.feat.off_high_30d)},
+    {h: "RSI", v: x => x.feat.rsi_1h, f: x => num(x.feat.rsi_1h, 0)},
+    {h: "BB폭 순위", v: x => x.feat.bbw_rank_4h, f: x => num(x.feat.bbw_rank_4h)},
+    {h: "거래량 배수", v: x => x.feat.vol_ratio_8h, f: x => num(x.feat.vol_ratio_8h)},
+    {h: "펀딩", v: x => x.feat.funding, f: x => x.feat.funding == null ? "–" : (x.feat.funding * 100).toFixed(3) + "%"},
+    {h: "OI 24h", v: x => x.feat.oi_chg_24h, f: x => pct(x.feat.oi_chg_24h), c: x => cls(x.feat.oi_chg_24h)},
+    {h: "차트", v: x => x.png ? 1 : 0, f: x => x.png ? "보기" : ""},
+  ];
+  const med = k => { const v = LIB.map(x => x.feat[k]).filter(v => v != null).sort((a, b) => a - b); return v.length ? v[v.length >> 1] : null; };
+  return stats([[LIB.length, "누적 급등 패턴"], [pct(med("ret_7d")), "상승 직전 7일 수익률 (중앙)"],
+                [pct(med("off_high_30d")), "30일 고점 대비 (중앙)"], [num(med("vol_ratio_8h")), "거래량 배수 (중앙)"]]) +
+    `<section class="panel"><h2>급등 직전 패턴 기록</h2>${table(cols, LIB, {click: s => {
+      const r = LIB.find(x => x.symbol === s && x.png); if (r) zoom(img(r.png)); }})}
+     <p class="note">스캔할 때마다 상승 상위 종목의 launch 직전 상태가 쌓입니다 (analyzer/patterns/library.jsonl).</p></section>`;
+}
+
+function viewBT() {
+  if (!BT) { fetch("/api/backtest").then(r => r.json()).then(d => { BT = d; render(); }); return `<div class="panel empty">불러오는 중…</div>`; }
+  const keys = Object.keys(BT);
+  if (!keys.length) return `<div class="panel empty">백테스트 결과가 없습니다 (backtest/results_regime/summary.json).</div>`;
+  return keys.map(k => {
+    const r = BT[k];
+    const rows = Object.entries(r.variants).map(([v, s]) => ({symbol: v, ...s}));
+    const cols = [
+      {h: "변형", l: 1, v: x => x.symbol, f: x => esc(x.symbol)},
+      {h: "거래", v: x => x.n, f: x => x.n ?? 0},
+      {h: "승률", v: x => x.win, f: x => x.win == null ? "–" : (x.win * 100).toFixed(0) + "%"},
+      {h: "평균%", v: x => x.avg, f: x => x.avg == null ? "–" : x.avg.toFixed(2), c: x => cls(x.avg)},
+      {h: "PF", v: x => x.PF, f: x => x.PF ?? "–"},
+      {h: "포트폴리오%", v: x => x.port_ret, f: x => x.port_ret == null ? "–" : x.port_ret.toFixed(1), c: x => cls(x.port_ret)},
+      {h: "MDD%", v: x => x.port_mdd, f: x => x.port_mdd == null ? "–" : x.port_mdd.toFixed(1)},
+    ];
+    return `<section class="panel"><h2>${esc(k)} — ${esc(r.name)} <span class="muted">(${r.start} ~ ${r.end}) · BTC 보유
+      <span class="${cls(r.btc_buy_hold)}">${r.btc_buy_hold > 0 ? "+" : ""}${r.btc_buy_hold}%</span></span></h2>
+      ${table(cols, rows, {sort: 5})}</section>`;
+  }).join("") + `<p class="note">수수료 왕복 0.2%, 롱만. 포트폴리오 = 자산 10%씩 최대 10개 동시.</p>`;
+}
+
+function render() {
+  $("#view").innerHTML = {pattern: viewPattern, range: viewRange, library: viewLibrary, bt: viewBT}[TAB]();
+}
+$("#tabs").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  TAB = b.dataset.t; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b));
+  try { localStorage.setItem("tab", TAB); } catch (e) {}
+  render();
+};
+try { const t = localStorage.getItem("tab"); if (t) { TAB = t; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === t)); } } catch (e) {}
+
+async function loadRuns(pick) {
+  const runs = await (await fetch("/api/runs")).json();
+  const sel = $("#runSel");
+  sel.innerHTML = runs.map(r => `<option value="${r.stamp}">${r.time?.slice(0, 16)} UTC · ${r.mode} · ${r.source}</option>`).join("") ||
+    `<option>기록 없음</option>`;
+  if (runs.length) { sel.value = pick || runs[0].stamp; await loadRun(sel.value); } else { RUN = null; render(); }
+}
+async function loadRun(stamp) {
+  RUN = await (await fetch("/api/run/" + stamp)).json();
+  $("#runInfo").textContent = `상위: ${RUN.top.map(t => t.symbol.replace("USDT", "") + " " + pct(t.chg24, 0)).join(", ")}`;
+  LIB = null; render();
+}
+$("#runSel").onchange = e => loadRun(e.target.value);
+
+// scan job
+let wasRunning = false, autoTimer = null;
+async function poll() {
+  const s = await (await fetch("/api/status")).json();
+  const st = $("#jobState"), log = $("#log");
+  if (s.log) { log.hidden = false; log.textContent = s.log; log.scrollTop = log.scrollHeight; }
+  st.textContent = s.running ? "실행 중…" : s.code == null ? "대기" : s.code === 0 ? "완료" : "오류 (로그 확인)";
+  st.className = "chip " + (s.running ? "" : s.code === 0 ? "go" : s.code ? "bad" : "");
+  $("#runBtn").disabled = s.running;
+  if (wasRunning && !s.running) { BT = null; await loadRuns(); }
+  wasRunning = s.running;
+  return s;
+}
+async function runScan() {
+  const p = {};
+  ["mode", "source", "top", "pick", "lookback", "range_hours", "recent", "vol_mult"].forEach(k => p[k] = $("#p_" + k).value);
+  p.library = $("#p_library").checked;
+  try { localStorage.setItem("params", JSON.stringify(p)); } catch (e) {}
+  const r = await fetch("/api/scan", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(p)});
+  const d = await r.json();
+  if (!d.ok) alert(d.msg);
+  wasRunning = true; poll();
+}
+$("#runBtn").onclick = runScan;
+$("#autoRun").onchange = () => {
+  clearInterval(autoTimer);
+  if ($("#autoRun").checked) autoTimer = setInterval(() => { if (!$("#runBtn").disabled) runScan(); }, +$("#autoMin").value * 60000);
+};
+$("#autoMin").onchange = () => $("#autoRun").onchange();
+
+(async () => {
+  const s = await poll();
+  $("#p_source").value = s.default_source || "api";
+  try {
+    const p = JSON.parse(localStorage.getItem("params") || "null");
+    if (p) { for (const [k, v] of Object.entries(p)) { const el = $("#p_" + k); if (el) el.type === "checkbox" ? el.checked = v : el.value = v; } }
+  } catch (e) {}
+  await loadRuns();
+  setInterval(poll, 3000);
+})();
+</script>
+</body>
+</html>

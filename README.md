@@ -26,6 +26,15 @@ python analyzer/pattern_scan.py
 python analyzer/pattern_scan.py --mode range --range-hours 48 --vol-mult 1.5
 ```
 
+### 웹 대시보드 (localhost)
+
+Windows: `run_web.bat` 더블클릭 → 브라우저에서 **http://localhost:8000** 이 열립니다. (직접 실행: `python analyzer/web.py`)
+
+- 화면에서 방식·상위 종목 수·횡보 구간·거래량 배수 등을 정하고 **스캔 실행** (실행 로그 실시간 표시, 15/30/60분 자동 반복 가능)
+- 탭: 급등 패턴 유사(급등 종목 차트 + 유사 후보 순위, 행 클릭 시 차트 확대) / 횡보 + 거래량(3%·5% 박스) / 패턴 기록(누적) / 백테스트 결과
+- 지난 실행 결과는 상단 "실행 기록"에서 선택. 표 머리글을 누르면 정렬
+- 추가 설치 없음(파이썬 표준 라이브러리 서버). 127.0.0.1 에만 열려 같은 PC 에서만 접속됩니다. 포트 변경: `run_web.bat --port 8080`
+
 ## 국면별 백테스트 (프로그램)
 
 BTC 시장 국면 5구간(`scripts/periods.py`)마다 같은 전략을 돌려 비교합니다.
