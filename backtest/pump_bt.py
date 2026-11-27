@@ -135,7 +135,7 @@ def fetch_symbol(sym: str, start: date, end: date, oi_start: date, root: str) ->
         b = _get(f"{BASE}/data/futures/um/daily/metrics/{sym}/{sym}-metrics-{d:%Y-%m-%d}.zip")
         if b:
             x = _read_csv_zip(b)
-            t = pd.to_datetime(x["create_time"], utc=True).astype("int64") // 10**6
+            t = (pd.to_datetime(x["create_time"], utc=True) - pd.Timestamp(0, tz="UTC")) // pd.Timedelta(milliseconds=1)
             oi.append(pd.DataFrame({"ts": t, "oi": x["sum_open_interest"].astype(float)}))
         d += timedelta(days=1)
     o = pd.concat(oi).drop_duplicates("ts").sort_values("ts") if oi else pd.DataFrame({"ts": [], "oi": []})
@@ -178,6 +178,8 @@ def load(path: str):
     k = k.reindex(idx)
     f = pd.DataFrame(z["f"], columns=["ts", "r"]) if z["f"].size else pd.DataFrame(columns=["ts", "r"])
     o = pd.DataFrame(z["o"], columns=["ts", "oi"]) if z["o"].size else pd.DataFrame(columns=["ts", "oi"])
+    if len(o) and o["ts"].max() < 10**11:  # stored in seconds by an older fetch (pandas 3 datetime unit)
+        o["ts"] = o["ts"] * 1000
     return k, f, o
 
 
@@ -298,6 +300,10 @@ def cmd_run(a):
     allt: dict[str, list] = {}
     t_last = 0
     btc = None
+    bk, _, _ = load(os.path.join(a.data, "BTCUSDT.npz"))
+    bc = bk["c"].ffill()
+    regime = (bc > bc.rolling(120).mean())  # BTC above its 20-day SMA at bar close
+    reg_t, reg_v = regime.index.values, regime.values
     for fn in files:
         sym = fn[:-4]
         try:
@@ -337,6 +343,10 @@ def cmd_run(a):
             {"sym": sym, "bleed": int(x["bleed"].sum()), "A": int((x["bleed"] & x["p_any"]).sum()),
              "fund_nan_tail": int(x["fund24"].isna().sum())})
 
+    for name in ("A_bleed+any", "bleed_only", "bleed+vol", "plain_breakout"):
+        lst = allt.get(name, [])
+        keep = [t for t in lst if reg_v[min(max(np.searchsorted(reg_t, t["t"], side="right") - 1, 0), len(reg_v) - 1)]]
+        allt[name + "|BTC>SMA20d"] = keep
     os.makedirs(a.out, exist_ok=True)
     report = {"generated": datetime.now(timezone.utc).isoformat(), "symbols": len(files),
               "from": a.__dict__["from"], "half_split": datetime.fromtimestamp(mid / 1000, timezone.utc).date().isoformat(),
@@ -353,6 +363,9 @@ def cmd_run(a):
         tr = pd.DataFrame(lst)
         tr.to_csv(os.path.join(a.out, f"trades_{re.sub(r'[^A-Za-z0-9_+.-]', '_', name)}.csv"), index=False)
         rep = {"all": stats(tr)}
+        if not len(tr):
+            report["variants"][name] = {"all": {"n": 0}}
+            continue
         if not name.startswith("OI") and not name.endswith("last30d"):
             rep["H1"] = stats(tr[tr["t"] < mid])
             rep["H2"] = stats(tr[tr["t"] >= mid])
@@ -367,13 +380,15 @@ def cmd_run(a):
     # compact log table
     print(f"\nsymbols={len(files)} from={report['from']} split={report['half_split']} end={report['data_end']}")
     print("btc", report.get("btc_return"))
-    print(f"{'variant':32s} {'seg':4s} {'n':>6s} {'win':>6s} {'avgR':>7s} {'medR':>6s} {'sumR':>8s} {'PF':>5s} {'DD':>7s} {'ex1%':>7s}")
+    print(f"{'variant':34s} {'seg':4s} {'n':>6s} {'win':>6s} {'avgR':>7s} {'medR':>6s} {'sumR':>8s} {'PF':>5s} {'DD':>7s} {'ex1%':>7s}")
     for name, rep in report["variants"].items():
         for seg in ("all", "H1", "H2"):
             s = rep.get(seg)
             if not s or not s.get("n"):
+                if seg == "all":
+                    print(f"{name:34s} all  0 trades")
                 continue
-            print(f"{name:32s} {seg:4s} {s['n']:6d} {s['win']:6.3f} {s['avgR']:7.3f} {s['medR']:6.2f} "
+            print(f"{name:34s} {seg:4s} {s['n']:6d} {s['win']:6.3f} {s['avgR']:7.3f} {s['medR']:6.2f} "
                   f"{s['sumR']:8.1f} {str(s['PF']):>5s} {s['maxDD_R']:7.1f} {s['avgR_ex_top1pct']:7.3f}")
 
 
