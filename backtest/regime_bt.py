@@ -14,6 +14,8 @@ Windows / macOS / Linux 공통으로 동작.
              precursor(하나 이상) = 24h 평균 펀딩 <= -0.03% | 8h 거래량 >= 7일 평균의 3배이면서 8h 가격변화 ±3% 이내
                                     | 4h BB폭(20) 이 30일 하위 10%
              셋업 A = bleed + precursor, 셋업 B = bleed 만
+             셋업 C (MANTRA형) = 7일 수익률 <= -15% & 24h 수익률 -12%~+3% & 24h OI(미결제약정) 변화 >= +10%
+                                 (OI = data.binance.vision futures/um/daily/metrics 5분 sum_open_interest, 후보일만 수집)
              BTC 필터(선택) = BTC 일봉 종가 > 20일 SMA (전일 확정값)
   진입 방식
     4h  (기존 방식) : 셋업 후 24h 안에 4h 종가 > 직전 6봉 최고가 & 거래량 >= 20봉 평균 1.5배 → 그 종가에 진입
@@ -49,7 +51,7 @@ from tradfi import is_tradfi  # noqa: E402
 BASE = "https://data.binance.vision"
 S3 = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"
 DATA = os.path.join(ROOT, "data", "bt")
-H1_DIR, M15_DIR = os.path.join(DATA, "h1"), os.path.join(DATA, "m15")
+H1_DIR, M15_DIR, OI_DIR = os.path.join(DATA, "h1"), os.path.join(DATA, "m15"), os.path.join(DATA, "oi")
 OUT = os.path.join(ROOT, "backtest", "results_regime")
 LOOKBACK_D = 45          # 특징 계산용 구간 시작 전 여유
 ARCHIVE_END = None       # 아카이브 마지막 날 (자동 탐지)
@@ -208,6 +210,44 @@ def load_15m(sym, days):
     return k[k.qv > 0]
 
 
+def oi_day(sym, d):
+    """하루치 5분 OI (계약 수). 캐시: 원본 zip, 없으면 빈 파일."""
+    os.makedirs(os.path.join(OI_DIR, sym), exist_ok=True)
+    path = os.path.join(OI_DIR, sym, f"{d:%Y-%m-%d}.zip")
+    if not os.path.exists(path):
+        b = _get(f"{BASE}/data/futures/um/daily/metrics/{sym}/{sym}-metrics-{d:%Y-%m-%d}.zip")
+        with open(path, "wb") as fh:
+            fh.write(b or b"")
+    b = open(path, "rb").read()
+    if not b:
+        return None
+    try:
+        with zipfile.ZipFile(io.BytesIO(b)) as z:
+            df = pd.read_csv(z.open(z.namelist()[0]), usecols=["create_time", "sum_open_interest"])
+    except Exception:
+        return None
+    return pd.Series(df.sum_open_interest.values, index=pd.to_datetime(df.create_time)).astype(float)
+
+
+def oi_change_24h(sym, times):
+    """각 시각 t 에 대해 OI(t)/OI(t-24h)-1. t 이전 1시간 안의 마지막 값 사용, 없으면 NaN."""
+    days = sorted({(t - pd.Timedelta(hours=h)).normalize() for t in times for h in (0, 1, 24, 25)})
+    parts = [x for x in (oi_day(sym, d) for d in days) if x is not None and len(x)]
+    out = pd.Series(np.nan, index=times)
+    if not parts:
+        return out
+    oi = pd.concat(parts).sort_index()
+    oi = oi[~oi.index.duplicated()]
+    oi = oi[oi > 0]
+    def at(t):
+        w = oi[(oi.index <= t) & (oi.index > t - pd.Timedelta(hours=1))]
+        return w.iloc[-1] if len(w) else np.nan
+    for t in times:
+        a, b = at(t), at(t - pd.Timedelta(hours=24))
+        out[t] = a / b - 1 if b and not np.isnan(a) and not np.isnan(b) else np.nan
+    return out
+
+
 # ------------------------------------------------------------------ 지표
 def ema(s, n):
     return s.ewm(span=n, adjust=False).mean()
@@ -244,10 +284,19 @@ def setups_for(sym, k, f, p_start, p_end, btc_ok):
     zero = (k.qv <= 0).astype(int).rolling(720, min_periods=1).sum()
     clean = pd.Series(zero.reindex(t_close - pd.Timedelta(hours=1)).values == 0, index=k4.index)
     base = bleed & liq & age & clean
+    ret24 = c / c.shift(6) - 1
+    mantra_pre = (ret7 <= -0.15) & ret24.between(-0.12, 0.03) & liq & age & clean
     inwin = (t_close >= pd.Timestamp(p_start)) & (t_close <= pd.Timestamp(p_end) + pd.Timedelta(days=1))
     btc = btc_ok.reindex(t_close, method="ffill").fillna(False).values
-    df = pd.DataFrame({"t": t_close, "A": (base & pre).values, "B": base.values, "btc": btc})[inwin]
-    return df[df.B], k4
+    df = pd.DataFrame({"t": t_close, "A": (base & pre).values, "B": base.values,
+                       "Cpre": mantra_pre.values, "btc": btc})[inwin]
+    df = df[df.B | df.Cpre].copy()
+    df["C"] = False
+    if df.Cpre.any():
+        oc = oi_change_24h(sym, list(df.t[df.Cpre]))
+        df.loc[df.Cpre, "C"] = (oc.values >= 0.10)
+        df.loc[df.Cpre, "oi24"] = oc.values
+    return df, k4
 
 
 # ------------------------------------------------------------------ 시뮬레이션
@@ -381,8 +430,11 @@ def run_period(key, p, syms, btc_ok, fee, workers):
         if len(k) < 24 * 40:
             return []
         st, k4 = setups_for(sym, k, f, p_start, p_end, btc_ok)
-        out, busy_until = [], {}
-        for _, s in st.iterrows():
+        out = []
+        # 셋업 계열마다 독립 시뮬레이션 (A 는 B 의 부분집합이라 B 계열에서 같이 집계)
+        for fam in ("B", "C"):
+          busy_until = {}
+          for _, s in st[st[fam]].iterrows():
             for mode in ("4h", "mtf"):
                 if busy_until.get(mode, pd.Timestamp(0)) > s.t:
                     continue
@@ -395,7 +447,8 @@ def run_period(key, p, syms, btc_ok, fee, workers):
                 ends = []
                 for ex in ("X1", "X2"):
                     g, xt, why = simulate(bars, i0, e, sl, ex, te + pd.Timedelta(hours=72))
-                    out.append(dict(period=key, symbol=sym, mode=mode, exit=ex, setup_t=s.t, A=bool(s.A),
+                    out.append(dict(period=key, symbol=sym, fam=fam, mode=mode, exit=ex, setup_t=s.t, A=bool(s.A),
+                                    oi24=s.get("oi24", np.nan),
                                     btc=bool(s.btc), entry_t=te, exit_t=xt, entry=e, sl=sl,
                                     gross=g, net=g - fee, reason=why))
                     ends.append(xt)
@@ -434,9 +487,9 @@ def cmd_run(a):
         if not tr.empty:
             for mode in ("4h", "mtf"):
                 for ex in ("X1", "X2"):
-                    for setup in ("A", "B"):
+                    for setup in ("A", "B", "C"):
                         for bf in (False, True):
-                            t = tr[(tr["mode"] == mode) & (tr["exit"] == ex)]
+                            t = tr[(tr["mode"] == mode) & (tr["exit"] == ex) & (tr.fam == ("C" if setup == "C" else "B"))]
                             if setup == "A":
                                 t = t[t.A]
                             if bf:
@@ -452,7 +505,7 @@ def cmd_run(a):
 
 def write_md(summary, fee):
     L = ["# 국면별 백테스트 결과", "",
-         f"수수료 왕복 {fee*100:.2f}% 반영, 롱만. 셋업 A = bleed + 선행신호, B = bleed 만. "
+         f"수수료 왕복 {fee*100:.2f}% 반영, 롱만. 셋업 A = bleed + 선행신호, B = bleed 만, C = MANTRA형(7일 -15%↓ & 24h -12%~+3% & OI 24h +10%↑). "
          "4h = 기존 4h 돌파 진입, mtf = 4h 셋업 → 1h EMA20 확인 → 15m 거래량 돌파 진입. "
          "X1 = 손절/3R 익절/72h, X2 = 본전 이동 + 15% 절반 익절 + 12% 트레일링/72h. "
          "포트폴리오 = 자산 10%씩 최대 10개 동시.", ""]
