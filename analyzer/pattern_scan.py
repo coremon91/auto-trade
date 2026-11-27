@@ -386,7 +386,7 @@ def main(a):
         png = os.path.join(PAT_DIR, f"{t_launch:%Y%m%d_%H%M}_{r.symbol}.png")
         plot_pattern(snap, png, f"{r.symbol} pump pattern  launch {t_launch:%m-%d %H:%M} -> peak {t_peak:%m-%d %H:%M}  +{gain:.0%}",
                      launch=True, after=after)
-        snap["png"] = os.path.relpath(png, ROOT)
+        snap["png"] = os.path.relpath(png, ROOT).replace(os.sep, "/")
         f = snap["feat"]
         print(f"  {r.symbol}: launch {t_launch} peak {t_peak} +{gain:.0%} | 7d {f['ret_7d']:+.1%} "
               f"30d고점대비 {f['off_high_30d']:+.1%} RSI {f['rsi_1h']:.0f} 거래량배수 {f['vol_ratio_8h']:.2f} "
@@ -450,7 +450,7 @@ def main(a):
     for i, r in enumerate(pick.to_dict("records")):
         r = _clean(r)
         png = os.path.join(OUT_DIR, f"scan_{stamp}_{r['symbol']}.png")
-        r["png"] = os.path.relpath(png, ROOT) if os.path.exists(png) else None
+        r["png"] = os.path.relpath(png, ROOT).replace(os.sep, "/") if os.path.exists(png) else None
         cands.append(r)
     report["candidates"] = cands
     report["n_candidates_scanned"] = len(res)

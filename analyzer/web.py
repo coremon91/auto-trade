@@ -141,7 +141,7 @@ class H(BaseHTTPRequestHandler):
             return self._file(BT, "application/json; charset=utf-8") if os.path.exists(BT) else self._send(200, {})
         if p == "/api/status":
             return self._send(200, status())
-        m = re.fullmatch(r"/img/(out|patterns)/([A-Za-z0-9_\-]+\.png)", p)
+        m = re.fullmatch(r"/img/(?:analyzer/)?(out|patterns)/([^/\\]+\.png)", p)   # 이전 실행 기록(역슬래시 경로)도 허용
         if m:
             f = os.path.join(OUT if m.group(1) == "out" else PAT, m.group(2))
             return self._file(f, "image/png") if os.path.exists(f) else self._send(404, {"error": "없음"})
