@@ -75,6 +75,41 @@
      "tp": 69
     }
    },
+   "4h|X1|C": {
+    "n": 422,
+    "syms": 279,
+    "win": 0.251,
+    "avg": -1.74,
+    "med": -8.2,
+    "PF": 0.68,
+    "sum": -732.4,
+    "port_ret": -51.9,
+    "port_mdd": -54.0,
+    "port_trades": 416,
+    "exits": {
+     "sl": 264,
+     "time": 102,
+     "tp": 55,
+     "eod": 1
+    }
+   },
+   "4h|X1|C|BTC>SMA20": {
+    "n": 108,
+    "syms": 90,
+    "win": 0.204,
+    "avg": -2.52,
+    "med": -8.2,
+    "PF": 0.57,
+    "sum": -271.9,
+    "port_ret": -24.3,
+    "port_mdd": -24.3,
+    "port_trades": 108,
+    "exits": {
+     "sl": 74,
+     "time": 20,
+     "tp": 14
+    }
+   },
    "4h|X2|A": {
     "n": 431,
     "syms": 282,
@@ -143,6 +178,41 @@
      "sl": 208,
      "trail": 165,
      "time": 126
+    }
+   },
+   "4h|X2|C": {
+    "n": 422,
+    "syms": 279,
+    "win": 0.232,
+    "avg": -1.56,
+    "med": -5.89,
+    "PF": 0.64,
+    "sum": -659.5,
+    "port_ret": -47.9,
+    "port_mdd": -48.3,
+    "port_trades": 417,
+    "exits": {
+     "sl": 210,
+     "trail": 149,
+     "time": 62,
+     "eod": 1
+    }
+   },
+   "4h|X2|C|BTC>SMA20": {
+    "n": 108,
+    "syms": 90,
+    "win": 0.25,
+    "avg": -2.02,
+    "med": -7.16,
+    "PF": 0.56,
+    "sum": -218.2,
+    "port_ret": -20.1,
+    "port_mdd": -22.7,
+    "port_trades": 108,
+    "exits": {
+     "sl": 57,
+     "trail": 32,
+     "time": 19
     }
    },
    "mtf|X1|A": {
@@ -217,6 +287,41 @@
      "eod": 2
     }
    },
+   "mtf|X1|C": {
+    "n": 641,
+    "syms": 379,
+    "win": 0.307,
+    "avg": -0.37,
+    "med": -4.24,
+    "PF": 0.9,
+    "sum": -238.4,
+    "port_ret": -25.6,
+    "port_mdd": -38.9,
+    "port_trades": 626,
+    "exits": {
+     "sl": 410,
+     "time": 122,
+     "tp": 108,
+     "eod": 1
+    }
+   },
+   "mtf|X1|C|BTC>SMA20": {
+    "n": 136,
+    "syms": 111,
+    "win": 0.324,
+    "avg": -0.39,
+    "med": -3.57,
+    "PF": 0.9,
+    "sum": -52.4,
+    "port_ret": -5.6,
+    "port_mdd": -7.9,
+    "port_trades": 136,
+    "exits": {
+     "sl": 83,
+     "time": 31,
+     "tp": 22
+    }
+   },
    "mtf|X2|A": {
     "n": 816,
     "syms": 376,
@@ -285,6 +390,41 @@
      "sl": 439,
      "trail": 329,
      "time": 136
+    }
+   },
+   "mtf|X2|C": {
+    "n": 641,
+    "syms": 379,
+    "win": 0.236,
+    "avg": -0.46,
+    "med": -3.2,
+    "PF": 0.85,
+    "sum": -294.3,
+    "port_ret": -26.2,
+    "port_mdd": -36.7,
+    "port_trades": 628,
+    "exits": {
+     "sl": 317,
+     "trail": 228,
+     "time": 95,
+     "eod": 1
+    }
+   },
+   "mtf|X2|C|BTC>SMA20": {
+    "n": 136,
+    "syms": 111,
+    "win": 0.279,
+    "avg": 0.69,
+    "med": -0.2,
+    "PF": 1.25,
+    "sum": 93.9,
+    "port_ret": 9.2,
+    "port_mdd": -6.4,
+    "port_trades": 136,
+    "exits": {
+     "sl": 60,
+     "trail": 52,
+     "time": 24
     }
    }
   }
@@ -363,6 +503,40 @@
      "time": 66
     }
    },
+   "4h|X1|C": {
+    "n": 199,
+    "syms": 135,
+    "win": 0.332,
+    "avg": -0.61,
+    "med": -8.2,
+    "PF": 0.88,
+    "sum": -121.6,
+    "port_ret": -19.2,
+    "port_mdd": -29.5,
+    "port_trades": 185,
+    "exits": {
+     "sl": 115,
+     "time": 56,
+     "tp": 28
+    }
+   },
+   "4h|X1|C|BTC>SMA20": {
+    "n": 48,
+    "syms": 43,
+    "win": 0.271,
+    "avg": -0.75,
+    "med": -8.2,
+    "PF": 0.87,
+    "sum": -35.9,
+    "port_ret": -4.1,
+    "port_mdd": -11.9,
+    "port_trades": 48,
+    "exits": {
+     "sl": 32,
+     "tp": 10,
+     "time": 6
+    }
+   },
    "4h|X2|A": {
     "n": 144,
     "syms": 106,
@@ -429,6 +603,40 @@
      "sl": 132,
      "trail": 100,
      "time": 60
+    }
+   },
+   "4h|X2|C": {
+    "n": 199,
+    "syms": 135,
+    "win": 0.307,
+    "avg": -0.33,
+    "med": -1.14,
+    "PF": 0.91,
+    "sum": -65.7,
+    "port_ret": -9.1,
+    "port_mdd": -26.0,
+    "port_trades": 186,
+    "exits": {
+     "sl": 90,
+     "trail": 68,
+     "time": 41
+    }
+   },
+   "4h|X2|C|BTC>SMA20": {
+    "n": 48,
+    "syms": 43,
+    "win": 0.292,
+    "avg": 1.0,
+    "med": -3.86,
+    "PF": 1.24,
+    "sum": 48.1,
+    "port_ret": 4.3,
+    "port_mdd": -8.9,
+    "port_trades": 48,
+    "exits": {
+     "sl": 23,
+     "trail": 18,
+     "time": 7
     }
    },
    "mtf|X1|A": {
@@ -499,6 +707,40 @@
      "tp": 127
     }
    },
+   "mtf|X1|C": {
+    "n": 316,
+    "syms": 193,
+    "win": 0.218,
+    "avg": -2.1,
+    "med": -4.88,
+    "PF": 0.53,
+    "sum": -664.6,
+    "port_ret": -43.4,
+    "port_mdd": -43.7,
+    "port_trades": 265,
+    "exits": {
+     "sl": 233,
+     "time": 56,
+     "tp": 27
+    }
+   },
+   "mtf|X1|C|BTC>SMA20": {
+    "n": 84,
+    "syms": 64,
+    "win": 0.202,
+    "avg": -1.61,
+    "med": -5.31,
+    "PF": 0.66,
+    "sum": -135.0,
+    "port_ret": -12.3,
+    "port_mdd": -16.9,
+    "port_trades": 82,
+    "exits": {
+     "sl": 63,
+     "tp": 12,
+     "time": 9
+    }
+   },
    "mtf|X2|A": {
     "n": 417,
     "syms": 239,
@@ -565,6 +807,40 @@
      "sl": 359,
      "trail": 343,
      "time": 99
+    }
+   },
+   "mtf|X2|C": {
+    "n": 316,
+    "syms": 193,
+    "win": 0.174,
+    "avg": -1.82,
+    "med": -3.98,
+    "PF": 0.49,
+    "sum": -575.6,
+    "port_ret": -39.1,
+    "port_mdd": -40.9,
+    "port_trades": 270,
+    "exits": {
+     "sl": 190,
+     "trail": 89,
+     "time": 37
+    }
+   },
+   "mtf|X2|C|BTC>SMA20": {
+    "n": 84,
+    "syms": 64,
+    "win": 0.167,
+    "avg": -0.92,
+    "med": -2.69,
+    "PF": 0.71,
+    "sum": -77.6,
+    "port_ret": -7.9,
+    "port_mdd": -15.6,
+    "port_trades": 84,
+    "exits": {
+     "sl": 41,
+     "trail": 35,
+     "time": 8
     }
    }
   }
@@ -643,6 +919,40 @@
      "tp": 10
     }
    },
+   "4h|X1|C": {
+    "n": 66,
+    "syms": 55,
+    "win": 0.333,
+    "avg": -0.86,
+    "med": -6.26,
+    "PF": 0.81,
+    "sum": -56.9,
+    "port_ret": -5.8,
+    "port_mdd": -10.7,
+    "port_trades": 66,
+    "exits": {
+     "sl": 37,
+     "time": 23,
+     "tp": 6
+    }
+   },
+   "4h|X1|C|BTC>SMA20": {
+    "n": 20,
+    "syms": 19,
+    "win": 0.3,
+    "avg": -1.71,
+    "med": -7.24,
+    "PF": 0.67,
+    "sum": -34.2,
+    "port_ret": -3.5,
+    "port_mdd": -5.7,
+    "port_trades": 20,
+    "exits": {
+     "sl": 13,
+     "time": 5,
+     "tp": 2
+    }
+   },
    "4h|X2|A": {
     "n": 42,
     "syms": 40,
@@ -709,6 +1019,40 @@
      "sl": 199,
      "time": 48,
      "trail": 32
+    }
+   },
+   "4h|X2|C": {
+    "n": 66,
+    "syms": 55,
+    "win": 0.258,
+    "avg": -1.14,
+    "med": -4.35,
+    "PF": 0.71,
+    "sum": -75.4,
+    "port_ret": -7.6,
+    "port_mdd": -10.9,
+    "port_trades": 66,
+    "exits": {
+     "sl": 32,
+     "time": 20,
+     "trail": 14
+    }
+   },
+   "4h|X2|C|BTC>SMA20": {
+    "n": 20,
+    "syms": 19,
+    "win": 0.15,
+    "avg": -3.36,
+    "med": -6.72,
+    "PF": 0.25,
+    "sum": -67.1,
+    "port_ret": -6.6,
+    "port_mdd": -7.2,
+    "port_trades": 20,
+    "exits": {
+     "sl": 11,
+     "trail": 7,
+     "time": 2
     }
    },
    "mtf|X1|A": {
@@ -779,6 +1123,40 @@
      "tp": 39
     }
    },
+   "mtf|X1|C": {
+    "n": 146,
+    "syms": 109,
+    "win": 0.342,
+    "avg": -0.75,
+    "med": -3.6,
+    "PF": 0.78,
+    "sum": -109.4,
+    "port_ret": -13.5,
+    "port_mdd": -23.8,
+    "port_trades": 132,
+    "exits": {
+     "sl": 91,
+     "time": 35,
+     "tp": 20
+    }
+   },
+   "mtf|X1|C|BTC>SMA20": {
+    "n": 25,
+    "syms": 23,
+    "win": 0.2,
+    "avg": -1.46,
+    "med": -4.87,
+    "PF": 0.63,
+    "sum": -36.6,
+    "port_ret": -3.7,
+    "port_mdd": -8.0,
+    "port_trades": 25,
+    "exits": {
+     "sl": 18,
+     "time": 4,
+     "tp": 3
+    }
+   },
    "mtf|X2|A": {
     "n": 102,
     "syms": 81,
@@ -847,6 +1225,40 @@
      "trail": 117,
      "time": 63,
      "eod": 1
+    }
+   },
+   "mtf|X2|C": {
+    "n": 146,
+    "syms": 109,
+    "win": 0.26,
+    "avg": -0.56,
+    "med": -0.23,
+    "PF": 0.79,
+    "sum": -81.5,
+    "port_ret": -10.3,
+    "port_mdd": -18.4,
+    "port_trades": 131,
+    "exits": {
+     "sl": 72,
+     "time": 38,
+     "trail": 36
+    }
+   },
+   "mtf|X2|C|BTC>SMA20": {
+    "n": 25,
+    "syms": 23,
+    "win": 0.16,
+    "avg": -0.79,
+    "med": -0.26,
+    "PF": 0.7,
+    "sum": -19.6,
+    "port_ret": -2.1,
+    "port_mdd": -5.1,
+    "port_trades": 25,
+    "exits": {
+     "sl": 12,
+     "trail": 9,
+     "time": 4
     }
    }
   }
@@ -925,6 +1337,39 @@
      "tp": 3
     }
    },
+   "4h|X1|C": {
+    "n": 100,
+    "syms": 72,
+    "win": 0.24,
+    "avg": -3.11,
+    "med": -5.85,
+    "PF": 0.33,
+    "sum": -311.1,
+    "port_ret": -19.8,
+    "port_mdd": -20.6,
+    "port_trades": 87,
+    "exits": {
+     "sl": 56,
+     "time": 41,
+     "tp": 3
+    }
+   },
+   "4h|X1|C|BTC>SMA20": {
+    "n": 13,
+    "syms": 12,
+    "win": 0.308,
+    "avg": -3.11,
+    "med": -6.09,
+    "PF": 0.34,
+    "sum": -40.4,
+    "port_ret": -4.0,
+    "port_mdd": -4.4,
+    "port_trades": 13,
+    "exits": {
+     "sl": 8,
+     "time": 5
+    }
+   },
    "4h|X2|A": {
     "n": 81,
     "syms": 73,
@@ -991,6 +1436,40 @@
      "sl": 23,
      "time": 17,
      "trail": 11
+    }
+   },
+   "4h|X2|C": {
+    "n": 100,
+    "syms": 72,
+    "win": 0.22,
+    "avg": -2.82,
+    "med": -5.79,
+    "PF": 0.37,
+    "sum": -281.8,
+    "port_ret": -16.7,
+    "port_mdd": -18.2,
+    "port_trades": 86,
+    "exits": {
+     "sl": 53,
+     "time": 35,
+     "trail": 12
+    }
+   },
+   "4h|X2|C|BTC>SMA20": {
+    "n": 13,
+    "syms": 12,
+    "win": 0.385,
+    "avg": -1.31,
+    "med": -4.94,
+    "PF": 0.69,
+    "sum": -17.0,
+    "port_ret": -1.7,
+    "port_mdd": -2.8,
+    "port_trades": 13,
+    "exits": {
+     "sl": 7,
+     "time": 4,
+     "trail": 2
     }
    },
    "mtf|X1|A": {
@@ -1061,6 +1540,40 @@
      "tp": 14
     }
    },
+   "mtf|X1|C": {
+    "n": 188,
+    "syms": 112,
+    "win": 0.303,
+    "avg": -1.03,
+    "med": -3.2,
+    "PF": 0.64,
+    "sum": -193.8,
+    "port_ret": -7.1,
+    "port_mdd": -12.9,
+    "port_trades": 132,
+    "exits": {
+     "sl": 115,
+     "time": 56,
+     "tp": 17
+    }
+   },
+   "mtf|X1|C|BTC>SMA20": {
+    "n": 26,
+    "syms": 25,
+    "win": 0.538,
+    "avg": 1.71,
+    "med": 0.58,
+    "PF": 1.84,
+    "sum": 44.5,
+    "port_ret": 4.4,
+    "port_mdd": -2.7,
+    "port_trades": 26,
+    "exits": {
+     "sl": 11,
+     "time": 9,
+     "tp": 6
+    }
+   },
    "mtf|X2|A": {
     "n": 110,
     "syms": 85,
@@ -1127,6 +1640,40 @@
      "sl": 45,
      "trail": 30,
      "time": 17
+    }
+   },
+   "mtf|X2|C": {
+    "n": 188,
+    "syms": 112,
+    "win": 0.176,
+    "avg": -0.83,
+    "med": -0.69,
+    "PF": 0.62,
+    "sum": -156.7,
+    "port_ret": -4.7,
+    "port_mdd": -9.4,
+    "port_trades": 132,
+    "exits": {
+     "sl": 85,
+     "trail": 65,
+     "time": 38
+    }
+   },
+   "mtf|X2|C|BTC>SMA20": {
+    "n": 26,
+    "syms": 25,
+    "win": 0.231,
+    "avg": 0.57,
+    "med": -0.2,
+    "PF": 1.33,
+    "sum": 14.8,
+    "port_ret": 1.4,
+    "port_mdd": -2.5,
+    "port_trades": 26,
+    "exits": {
+     "trail": 13,
+     "sl": 9,
+     "time": 4
     }
    }
   }
@@ -1205,6 +1752,40 @@
      "tp": 27
     }
    },
+   "4h|X1|C": {
+    "n": 101,
+    "syms": 89,
+    "win": 0.297,
+    "avg": -0.12,
+    "med": -8.2,
+    "PF": 0.98,
+    "sum": -11.9,
+    "port_ret": -2.2,
+    "port_mdd": -10.5,
+    "port_trades": 101,
+    "exits": {
+     "sl": 63,
+     "tp": 21,
+     "time": 17
+    }
+   },
+   "4h|X1|C|BTC>SMA20": {
+    "n": 35,
+    "syms": 32,
+    "win": 0.257,
+    "avg": -0.69,
+    "med": -8.2,
+    "PF": 0.88,
+    "sum": -24.0,
+    "port_ret": -2.5,
+    "port_mdd": -6.9,
+    "port_trades": 35,
+    "exits": {
+     "sl": 23,
+     "tp": 7,
+     "time": 5
+    }
+   },
    "4h|X2|A": {
     "n": 102,
     "syms": 88,
@@ -1271,6 +1852,40 @@
      "sl": 59,
      "trail": 52,
      "time": 26
+    }
+   },
+   "4h|X2|C": {
+    "n": 101,
+    "syms": 89,
+    "win": 0.267,
+    "avg": -1.04,
+    "med": -6.99,
+    "PF": 0.76,
+    "sum": -104.9,
+    "port_ret": -10.4,
+    "port_mdd": -12.4,
+    "port_trades": 101,
+    "exits": {
+     "sl": 52,
+     "trail": 35,
+     "time": 14
+    }
+   },
+   "4h|X2|C|BTC>SMA20": {
+    "n": 35,
+    "syms": 32,
+    "win": 0.257,
+    "avg": -1.98,
+    "med": -8.2,
+    "PF": 0.6,
+    "sum": -69.2,
+    "port_ret": -6.7,
+    "port_mdd": -9.8,
+    "port_trades": 35,
+    "exits": {
+     "sl": 21,
+     "trail": 7,
+     "time": 7
     }
    },
    "mtf|X1|A": {
@@ -1345,6 +1960,40 @@
      "eod": 2
     }
    },
+   "mtf|X1|C": {
+    "n": 139,
+    "syms": 110,
+    "win": 0.266,
+    "avg": -0.76,
+    "med": -4.38,
+    "PF": 0.81,
+    "sum": -105.9,
+    "port_ret": -10.7,
+    "port_mdd": -17.0,
+    "port_trades": 139,
+    "exits": {
+     "sl": 96,
+     "tp": 24,
+     "time": 19
+    }
+   },
+   "mtf|X1|C|BTC>SMA20": {
+    "n": 49,
+    "syms": 43,
+    "win": 0.367,
+    "avg": 0.35,
+    "med": -3.55,
+    "PF": 1.09,
+    "sum": 17.0,
+    "port_ret": 1.5,
+    "port_mdd": -4.5,
+    "port_trades": 49,
+    "exits": {
+     "sl": 30,
+     "tp": 12,
+     "time": 7
+    }
+   },
    "mtf|X2|A": {
     "n": 199,
     "syms": 131,
@@ -1411,6 +2060,40 @@
      "sl": 115,
      "trail": 111,
      "time": 39
+    }
+   },
+   "mtf|X2|C": {
+    "n": 139,
+    "syms": 110,
+    "win": 0.237,
+    "avg": -0.1,
+    "med": -3.2,
+    "PF": 0.97,
+    "sum": -13.8,
+    "port_ret": -1.9,
+    "port_mdd": -12.5,
+    "port_trades": 139,
+    "exits": {
+     "sl": 70,
+     "trail": 55,
+     "time": 14
+    }
+   },
+   "mtf|X2|C|BTC>SMA20": {
+    "n": 49,
+    "syms": 43,
+    "win": 0.347,
+    "avg": 2.18,
+    "med": -0.2,
+    "PF": 1.89,
+    "sum": 107.1,
+    "port_ret": 11.0,
+    "port_mdd": -2.2,
+    "port_trades": 49,
+    "exits": {
+     "trail": 24,
+     "sl": 19,
+     "time": 6
     }
    }
   }
