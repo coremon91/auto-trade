@@ -155,8 +155,11 @@ const img = p => { if (!p) return null; const s = p.replace(/\\/g, "/").split("/
 const money = v => v == null ? "–" : "$" + (v / 1e6).toFixed(1) + "M";
 let EXITS = null;
 let RUN = null, TAB = "compare", LIB = null, BT = null, CMP = null, SIGS = null, MSIG = {}, PAPER = null;
-let PAMT = 100, PDAYS = "0", PB = "1";
-try { PAMT = +(localStorage.getItem("pamt") || 100); PDAYS = localStorage.getItem("pdays") || "0"; PB = localStorage.getItem("pb") || "1"; } catch (e) {}
+let PAMT = 100, PDAYS = "0", PB = "1", PSL = "8", PTP = "15", PHOLD = "72";
+try { PAMT = +(localStorage.getItem("pamt") || 100); PDAYS = localStorage.getItem("pdays") || "0"; PB = localStorage.getItem("pb") || "1";
+  PSL = localStorage.getItem("psl") || PSL; PTP = localStorage.getItem("ptp") || PTP; PHOLD = localStorage.getItem("phold") || PHOLD; } catch (e) {}
+function setRule(k, v) { if (k === "sl") PSL = v; if (k === "tp") PTP = v; if (k === "hold") PHOLD = v; PAPER = null;
+  try { localStorage.setItem("p" + k, v); } catch (e) {} render(); }
 let CG = "backfill", CB = "1";   // 기본: BTC 20일선 위일 때만
 try { CG = localStorage.getItem("cg") || CG; CB = localStorage.getItem("cb2") || CB; } catch (e) {}
 
@@ -518,10 +521,29 @@ function curveSVG(curve) {
     ${ticks}${xl}${lines}</svg><div style="font-size:12px;margin-top:6px">${legend}</div>`;
 }
 
+function tpTableHTML(T) {
+  if (!T || !Object.keys(T).length) return "";
+  const tps = Object.keys(T).map(Number).sort((a, b) => a - b), ms = ["M1", "M2", "M3", "M4", "M5", "M6", "M0"].filter(m => tps.some(t => T[t][m]));
+  const best = {}; ms.forEach(m => { best[m] = tps.reduce((a, t) => (T[t][m]?.avg ?? -9) > (T[a][m]?.avg ?? -9) ? t : a, tps[0]); });
+  return `<section class="panel"><h2>익절 라인별 결과 <span class="muted" style="font-weight:400">손절 -${PSL}%, 최대 ${PHOLD}시간 고정 · 청산 완료 거래 평균 (괄호 = 익절 도달 비율)</span></h2>
+    <div class="tw"><table><thead><tr><th>익절</th>${ms.map(m => `<th><span class="dot" style="background:${MCOLOR[m]}"></span>${m}</th>`).join("")}</tr></thead><tbody>
+    ${tps.map(t => `<tr style="${t === +PTP ? "background:var(--hover)" : ""}"><td class="l"><a href="#" onclick="setRule('tp','${t}');return false">+${t}%</a>${t === +PTP ? " ◀" : ""}</td>${ms.map(m => { const r = T[t][m];
+      return r ? `<td class="${cls(r.avg)}" style="${best[m] === t ? "font-weight:700;outline:2px solid var(--accent);outline-offset:-2px" : ""}">${pct(r.avg, 2)} <span class="muted">(${(r.hit * 100).toFixed(0)}%)</span></td>` : "<td>–</td>"; }).join("")}</tr>`).join("")}
+    </tbody></table></div>
+    <p class="note">굵은 테두리 = 그 방식에서 평균이 가장 좋은 익절 라인. 익절을 올리면 닿는 비율이 급격히 줄어듭니다. 한 기간의 최고값을 고르면 과최적화 위험이 있으니,
+    여러 라인에서 고르게 좋은지를 보세요. 익절 행을 누르면 그 규칙으로 가상 매매를 다시 계산합니다.</p></section>`;
+}
+
 function viewPaper() {
-  if (!PAPER) { fetch(`/api/paper?group=${CG}&amount=${PAMT}&days=${PDAYS}&btc=${PB}`).then(r => r.json()).then(d => { PAPER = d; render(); }).catch(e => { PAPER = errObj(e); render(); }); }
+  if (!PAPER) { fetch(`/api/paper?group=${CG}&amount=${PAMT}&days=${PDAYS}&btc=${PB}&rule=${PSL}-${PTP}-${PHOLD}`).then(r => r.json()).then(d => { PAPER = d; render(); }).catch(e => { PAPER = errObj(e); render(); }); }
   const head = `<section class="panel"><h2>가상 매매</h2>
-    <p style="margin:0 0 10px">각 방식이 고른 종목을 선정 시점 가격에 <b>$${PAMT}</b>씩 산 것으로 보고, 손절 -8% / 익절 +15% / 72시간 뒤 청산(수수료 0.2%)으로 결과를 계산합니다. 아직 안 끝난 거래는 현재가로 평가합니다.</p>
+    <p style="margin:0 0 10px">각 방식이 고른 종목을 선정 시점 가격에 <b>$${PAMT}</b>씩 산 것으로 보고, <b>손절 -${PSL}% / 익절 +${PTP}% / ${PHOLD}시간 뒤</b> 청산(수수료 0.2%)으로 결과를 계산합니다. 아직 안 끝난 거래는 현재가로 평가합니다.</p>
+    <div class="row" style="margin-bottom:10px">
+      <label class="muted">손절 <select onchange="setRule('sl', this.value)">${[8, 12].map(v => `<option ${+PSL === v ? "selected" : ""} value="${v}">-${v}%</option>`).join("")}</select></label>
+      <label class="muted">익절 <select onchange="setRule('tp', this.value)">${[15, 20, 25, 30, 40, 50, 75, 100].map(v => `<option ${+PTP === v ? "selected" : ""} value="${v}">+${v}%</option>`).join("")}</select></label>
+      <label class="muted">최대 보유 <select onchange="setRule('hold', this.value)">${[72, 168].map(v => `<option ${+PHOLD === v ? "selected" : ""} value="${v}">${v}시간</option>`).join("")}</select></label>
+      ${PSL + "-" + PTP + "-" + PHOLD !== "8-15-72" ? `<button onclick="setRule('sl','8');setRule('tp','15');setRule('hold','72')">기본값(8/15/72)으로</button>` : ""}
+    </div>
     <div class="row">${seg("g", CG, [["backfill", "과거 채움"], ["api", "실시간 기록"]], "setCG")}
       ${seg("p", PB, [["1", "BTC 20일선 위일 때만 매수"], ["0", "모든 신호 매수"]], "setPB")}
       ${seg("d", PDAYS, [["0", "전체 기간"], ["30", "최근 30일"], ["7", "최근 7일"]], "setPDAYS")}
@@ -562,6 +584,7 @@ function viewPaper() {
                        [base ? pct(base.ret, 2) : "–", "무작위 기준선 수익률"]]) +
     `<section class="panel"><h2>방식별 가상 계좌</h2>${table(sumCols, S, {sort: 9})}
       <p class="note">M0 무작위는 비교용 기준선이며 총합에서 제외. 수익률 = 합계 손익 / 투입.</p></section>
+     ${tpTableHTML(PAPER.tp_table)}
      <section class="panel"><h2>누적 실현 손익</h2>${curveSVG(PAPER.curve)}</section>
      <section class="panel"><h2>보유 중 (${PAPER.open.length})</h2>${table(posCols(false), PAPER.open, {click: clickPng(PAPER.open)})}</section>
      <section class="panel"><h2>청산 완료 (최근 ${PAPER.closed.length})</h2>${table(posCols(true), PAPER.closed, {click: clickPng(PAPER.closed)})}</section>`;

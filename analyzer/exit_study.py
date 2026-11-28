@@ -42,6 +42,12 @@ RULES = {
 }
 
 
+# 익절 라인 올리기 격자: 손절 8/12% × 익절 15~100% × 최대보유 72/168h
+TP_LEVELS = [.15, .20, .25, .30, .40, .50, .75, 1.00]
+TP_GRID = {f"손절{int(sl*100)} 익절{int(tp*100)} {hold}h": dict(sl=sl, tp=tp, hold=hold)
+           for hold in (72, 168) for sl in (.08, .12) for tp in TP_LEVELS}
+
+
 def sim(h, l, c, rule):
     """h,l,c: 진입 후 1h 봉 (진입가 대비 비율로 정규화된 배열). 반환 (수익률, 보유시간h, 사유)."""
     sl, tp, hold = rule.get("sl"), rule.get("tp"), rule["hold"]
@@ -100,7 +106,7 @@ def run(df):
             p0 = x.price
             h, l, c = k.h.values / p0, k.l.values / p0, k.c.values / p0
             r = dict(id=x.id, method=x.method, sub=x.sub, symbol=sym, t=x.t, btc_ok=x.btc_ok)
-            for name, rule in RULES.items():
+            for name, rule in {**RULES, **TP_GRID}.items():
                 ret, held, why = sim(h, l, c, rule)
                 r[name] = ret - FEE
                 r[name + "|h"] = held
@@ -114,7 +120,8 @@ def run(df):
     return pd.DataFrame(rows)
 
 
-def summarize(res, btc_only):
+def summarize(res, btc_only, rules=None):
+    rules = rules or RULES
     d0 = res[res.btc_ok == 1] if btc_only else res
     mid = d0.t.min() + (d0.t.max() - d0.t.min()) / 2 if len(d0) else None
     out = {}
@@ -123,7 +130,7 @@ def summarize(res, btc_only):
         if d.empty:
             continue
         out[m] = {}
-        for name in RULES:
+        for name in rules:
             v = d[name]
             a, b = d[d.t < mid][name], d[d.t >= mid][name]
             w, lo = v[v > 0].sum(), -v[v <= 0].sum()
@@ -168,6 +175,26 @@ def write(res, summ, path):
     print("\n".join(L))
 
 
+def write_tp(res, tpg, path):
+    L = ["# 익절 라인 올리기", "", "값 = 거래당 평균 수익률 (괄호 = 익절에 실제로 닿은 비율). 손절은 같은 봉에서 먼저 처리.", ""]
+    for key, title in (("all", "전체 신호"), ("btc", "BTC 20일선 위일 때만")):
+        S = tpg[key]
+        for hold in (72, 168):
+            for sl in (8, 12):
+                L += [f"## {title} — 손절 {sl}%, 최대 {hold}h", "", "| 익절 | " + " | ".join(S) + " |", "|---|" + "---|" * len(S)]
+                for tp in TP_LEVELS:
+                    nm = f"손절{sl} 익절{int(tp*100)} {hold}h"
+                    cells = []
+                    for m in S:
+                        r = S[m][nm]
+                        hit = r["why"].get("tp", 0) / r["n"]
+                        cells.append(f"{pct(r['avg'])} ({hit*100:.0f}%)")
+                    L.append(f"| +{int(tp*100)}% | " + " | ".join(cells) + " |")
+                L.append("")
+    open(path, "w", encoding="utf-8").write("\n".join(L))
+    print("\n".join(L))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--group", choices=["backfill", "api"], default="backfill")
@@ -180,8 +207,11 @@ def main():
     if res.empty:
         raise SystemExit(f"이후 {MAXH}h 봉이 있는 신호가 없음 (1h 캐시: data/bt/h1)")
     summ = {"all": summarize(res, False), "btc": summarize(res, True)}
+    tpg = {"all": summarize(res, False, TP_GRID), "btc": summarize(res, True, TP_GRID)}
+    write_tp(res, tpg, os.path.join(ps.OUT_DIR, "exit_tp_grid.md"))
     os.makedirs(ps.OUT_DIR, exist_ok=True)
-    blob = dict(group=a.group, rules=RULES, n=len(res), start=str(res.t.min()), end=str(res.t.max()), summary=summ)
+    blob = dict(group=a.group, rules=RULES, n=len(res), start=str(res.t.min()), end=str(res.t.max()), summary=summ,
+                tp_rules=TP_GRID, tp_summary=tpg)
     for path in (os.path.join(ps.OUT_DIR, "exit_study.json"), os.path.join(HERE, "data", f"exit_study_{a.group}.json")):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         json.dump(blob, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1, default=str)

@@ -42,6 +42,11 @@ METHODS = {"M0": "무작위 (기준선)", "M1": "급등 차트 유사", "M2": "�
            "M4": "RSI 과매도 반등", "M5": "펀딩+OI 숏스퀴즈", "M6": "BTC 대비 상대강도"}
 CAP = CAP_M1 = 6          # 방식별 스캔당 선정 종목 수
 HOLD, SL, TP, FEE = 72, 0.08, 0.15, 0.002
+# 청산 규칙 격자 (가상 매매 탭에서 선택): "손절-익절-최대보유h"
+EXIT_SL, EXIT_TP, EXIT_HOLD = (8, 12), (15, 20, 25, 30, 40, 50, 75, 100), (72, 168)
+EXIT_GRID = {f"{sl}-{tp}-{h}": dict(sl=sl / 100, tp=tp / 100, hold=h) for sl in EXIT_SL for tp in EXIT_TP for h in EXIT_HOLD}
+DEFAULT_RULE = "8-15-72"
+MAXH = max(EXIT_HOLD)
 DEDUP_H = 24
 
 
@@ -55,8 +60,10 @@ def db():
         r4 REAL, r24 REAL, r72 REAL, mfe REAL, mae REAL, trade REAL, hit30 INTEGER, bars INTEGER DEFAULT 0,
         UNIQUE(source, method, symbol, scan_t))""")
     c.execute("CREATE INDEX IF NOT EXISTS ix_sig ON signals(source, method, symbol, scan_t)")
+    c.execute("""CREATE TABLE IF NOT EXISTS exits(signal_id INTEGER, rule TEXT, ret REAL, status TEXT, held INTEGER,
+                 PRIMARY KEY(signal_id, rule))""")
     have = {r[1] for r in c.execute("PRAGMA table_info(signals)")}
-    for col, typ in [("status", "TEXT"), ("exit_price", "REAL"), ("exit_t", "TEXT"), ("last_price", "REAL"),
+    for col, typ in [("xbars", "INTEGER DEFAULT 0"), ("status", "TEXT"), ("exit_price", "REAL"), ("exit_t", "TEXT"), ("last_price", "REAL"),
                      ("last_t", "TEXT"), ("rank", "INTEGER"), ("png", "TEXT")]:
         if col not in have:
             c.execute(f"ALTER TABLE signals ADD COLUMN {col} {typ}")
@@ -355,6 +362,26 @@ def run_scan(src, a, source, charts=True, quiet=False, report=True):
 
 
 # ------------------------------------------------------------------ 성과
+def sim_exit(h, l, c, rule):
+    """h,l,c = 진입가 대비 비율. 손절 먼저(보수적). 반환 (순수익률, 상태, 보유시간h). 아직 안 끝났으면 상태 open."""
+    sl, tp, hold = rule["sl"], rule["tp"], rule["hold"]
+    n = min(hold, len(c))
+    for i in range(n):
+        if l[i] <= 1 - sl:
+            return -sl - FEE, "sl", i + 1
+        if h[i] >= 1 + tp:
+            return tp - FEE, "tp", i + 1
+    if len(c) >= hold:
+        return c[hold - 1] - 1 - FEE, "time", hold
+    return (c[-1] - 1 - FEE if len(c) else -FEE), "open", len(c)
+
+
+def exits_for(k, p0):
+    k = k.iloc[:MAXH]
+    h, l, c = k.h.values / p0, k.l.values / p0, k.c.values / p0
+    return {name: sim_exit(h, l, c, r) for name, r in EXIT_GRID.items()}
+
+
 def outcome(k, p0):
     """k: 신호 이후 1h 봉 (첫 봉 = 신호 시각에 열린 봉)."""
     k = k.iloc[:HOLD]
@@ -398,7 +425,7 @@ def _refresh_prices(con, src, now):
 def update(con, src, source):
     g = _grp(source)
     now = pd.Timestamp(src.now(), unit="ms")
-    q = (f"SELECT id, symbol, scan_t, price FROM signals WHERE bars < {HOLD} "
+    q = (f"SELECT id, symbol, scan_t, price FROM signals WHERE (bars < {HOLD} OR COALESCE(xbars,0) < {MAXH}) "
          f"AND source IN ({','.join('?' * len(g))}) AND scan_t <= ?")
     rows = pd.DataFrame(con.execute(q, (*g, str(now - pd.Timedelta(hours=1)))).fetchall(), columns=["id", "symbol", "scan_t", "price"])
     n_px = 0
@@ -416,8 +443,11 @@ def update(con, src, source):
         if k is None or k.empty:
             return out
         for x in r.itertuples():
-            res = outcome(k[k.index >= x.t], x.price)
+            kk = k[k.index >= x.t]
+            res = outcome(kk, x.price)
             if res:
+                res["xbars"] = min(len(kk), MAXH)
+                res["exits"] = exits_for(kk, x.price)
                 out.append((x.id, res))
         return out
 
@@ -428,6 +458,9 @@ def update(con, src, source):
                     " last_price=?, last_t=? WHERE id=?",
                     (r["bars"], r["r4"], r["r24"], r["r72"], r["mfe"], r["mae"], r["trade"], r["hit30"], r["status"],
                      r["exit_price"], r["exit_t"], r["last_price"], r["last_t"], i))
+        con.execute("UPDATE signals SET xbars=? WHERE id=?", (r["xbars"], i))
+        con.executemany("INSERT OR REPLACE INTO exits(signal_id, rule, ret, status, held) VALUES(?,?,?,?,?)",
+                        [(i, nm, float(v[0]), v[1], int(v[2])) for nm, v in r["exits"].items()])
     n_px = _refresh_prices(con, src, now)
     con.commit()
     print(f"  현재가 갱신 {n_px}건")
@@ -445,6 +478,37 @@ def load(con, group="backfill"):
     return df
 
 
+def load_exits(con, group, rule):
+    """규칙 하나의 신호별 결과 (local DB, 없으면 seed)."""
+    g = _grp(group)
+    q = (f"SELECT e.signal_id AS id, e.ret AS xret, e.status AS xstatus, e.held AS xheld FROM exits e JOIN signals s ON s.id=e.signal_id "
+         f"WHERE e.rule=? AND s.source IN ({','.join('?' * len(g))})")
+    ex = pd.read_sql_query(q, con, params=(rule, *g))
+    if group != "api" and ex.empty and os.path.exists(SEED):
+        with sqlite3.connect(SEED) as sc:
+            try:
+                ex = pd.read_sql_query("SELECT signal_id AS id, ret AS xret, status AS xstatus, held AS xheld FROM exits WHERE rule=?",
+                                       sc, params=(rule,))
+            except Exception:
+                pass
+    return ex
+
+
+def tp_table(con, group, df, sl, hold):
+    """같은 손절·보유시간에서 익절 라인별 방식 평균 (청산 완료 거래만)."""
+    out = {}
+    for tp in EXIT_TP:
+        rule = f"{sl}-{tp}-{hold}"
+        ex = load_exits(con, group, rule)
+        if ex.empty:
+            continue
+        d = df[["id", "method"]].merge(ex, on="id")
+        d = d[d.xstatus != "open"]
+        out[tp] = {m: dict(avg=float(x.xret.mean()), n=len(x), hit=float((x.xstatus == "tp").mean()))
+                   for m, x in d.groupby("method")}
+    return out
+
+
 def export_seed():
     """과거 채움 결과만 SEED 파일로 복사 (저장소 커밋용)."""
     if os.path.exists(SEED):
@@ -452,6 +516,7 @@ def export_seed():
     with sqlite3.connect(DB) as c:
         c.execute(f"ATTACH DATABASE ? AS s", (SEED,))
         c.execute("CREATE TABLE s.signals AS SELECT * FROM main.signals WHERE source='backfill'")
+        c.execute("CREATE TABLE s.exits AS SELECT e.* FROM main.exits e JOIN main.signals x ON x.id=e.signal_id WHERE x.source='backfill'")
         n = c.execute("SELECT COUNT(*) FROM s.signals").fetchone()[0]
         c.commit()
     with sqlite3.connect(SEED) as c:
@@ -492,7 +557,7 @@ def _md(s):
     return float(s.median()) if len(s) else None
 
 
-def paper(df, amount=100.0, method=None, days=0, btc_only=False):
+def paper(df, amount=100.0, method=None, days=0, btc_only=False, ex=None):
     """가상 매매: 신호마다 amount USDT 매수, 손절/익절/72h 규칙으로 청산. 미청산은 현재가로 평가."""
     if df.empty:
         return dict(summary=[], open=[], closed=[], curve={})
@@ -506,10 +571,18 @@ def paper(df, amount=100.0, method=None, days=0, btc_only=False):
         df = df[df.btc_ok == 1]
     if df.empty:
         return dict(summary=[], open=[], closed=[], curve={}, amount=amount)
-    df["closed"] = df.trade.notna()
     df["stale"] = df.last_price.isna()            # 아직 현재가 갱신 전 (선정가로 평가)
     df["last_price"] = df.last_price.fillna(df.price)
-    df["status"] = df.status.fillna("open")
+    if ex is not None:                              # 다른 청산 규칙: 규칙별 결과로 덮어씀
+        df = df.merge(ex, on="id", how="left")
+        df["status"] = df.xstatus.fillna("open")
+        df["closed"] = df.status != "open"
+        df["trade"] = np.where(df.closed, df.xret, np.nan)
+        df["exit_t"] = np.where(df.closed, (df.t + pd.to_timedelta(df.xheld.fillna(0), unit="h")).astype(str), None)
+        df["exit_price"] = np.where(df.closed, df.price * (1 + df.xret + FEE), np.nan)
+    else:
+        df["closed"] = df.trade.notna()
+        df["status"] = df.status.fillna("open")
     df["ret"] = np.where(df.closed, df.trade, df.last_price / df.price - 1 - FEE)
     df["pnl"] = df.ret * amount
     summ = []

@@ -140,7 +140,14 @@ def tracker_api(p, query):
                 days = int(q.get("days") or 0)
             except ValueError:
                 amount, days = 100.0, 0
-            return tracker.paper(df, amount, None, days, q.get("btc") == "1")
+            rule = q.get("rule") if q.get("rule") in tracker.EXIT_GRID else tracker.DEFAULT_RULE
+            ex = None if rule == tracker.DEFAULT_RULE else tracker.load_exits(con, group, rule)
+            res = tracker.paper(df, amount, None, days, q.get("btc") == "1", ex)
+            sl, _, hold = rule.split("-")
+            d2 = df[df.btc_ok == 1] if q.get("btc") == "1" else df
+            res.update(rule=rule, grid=dict(sl=tracker.EXIT_SL, tp=tracker.EXIT_TP, hold=tracker.EXIT_HOLD),
+                       tp_table=tracker.tp_table(con, group, d2, sl, hold))
+            return res
         if q.get("method") in tracker.METHODS:
             df = df[df.method == q["method"]]
         lim = min(int(q.get("limit") or 300), 2000)
