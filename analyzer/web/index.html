@@ -360,7 +360,7 @@ function viewCompare() {
   if (!CMP) { fetch(`/api/compare?group=${CG}&btc=${CB}`).then(r => r.json()).then(d => { CMP = d; render(); }).catch(e => { CMP = errObj(e); render(); }); return `<div class="panel empty">불러오는 중…</div>`; }
   if (!SIGS) { fetch(`/api/signals?group=${CG}&limit=100`).then(r => r.json()).then(d => { SIGS = d; render(); }).catch(e => { SIGS = errObj(e); render(); }); }
   const head = `<div class="row" style="margin-bottom:12px">
-      ${seg("g", CG, [["backfill", "과거 채움 (아카이브)"], ["api", "실시간 기록 (API)"]], "setCG")}
+      ${seg("g", CG, [["backfill", "하락장 60일 (26.09~11)"], ["bull", "상승장 (24.11~25.07)"], ["api", "실시간 기록"]], "setCG")}
       ${seg("b", CB, [["1", "BTC 20일선 위일 때만 (기본)"], ["0", "모든 신호"]], "setCB")}</div>`;
   if (!CMP.info) return head + `<div class="panel empty">${CG === "api" ? "아직 실시간 기록이 없습니다. 스캔을 실행하면 신호가 쌓이고, 4h·24h·72h 뒤 성과가 자동 계산됩니다."
       : "과거 채움 데이터가 없습니다. 명령 프롬프트에서 <code>python analyzer\\tracker.py backfill --days 60</code> 실행."}</div>`;
@@ -460,7 +460,7 @@ function viewMethod(m) {
   const st = CMP?.rows?.find(r => r.method === m && !r.sub), base = CMP?.rows?.find(r => r.method === "M0" && !r.sub);
   const head = `<section class="panel"><h2><span class="dot" style="background:${MCOLOR[m]}"></span>${m} ${title}</h2>
       <p style="margin:0 0 10px">${rule}</p>
-      <div class="row">${seg("g", CG, [["backfill", "과거 채움"], ["api", "실시간 기록"]], "setCG")}
+      <div class="row">${seg("g", CG, [["backfill", "하락장 60일"], ["bull", "상승장"], ["api", "실시간 기록"]], "setCG")}
       ${seg("b", CB, [["1", "BTC 20일선 위일 때만 (기본)"], ["0", "모든 신호"]], "setCB")}</div></section>` +
     (st ? stats([[st.n, "누적 신호"], [pct(st.r72, 2), "72h 평균 수익률"], [st.win72 == null ? "–" : (st.win72 * 100).toFixed(0) + "%", "72h 승률"],
                  [pct(st.trade, 2), "거래 평균 (손절/익절 규칙)"], [st.hit30 == null ? "–" : (st.hit30 * 100).toFixed(1) + "%", "+30% 도달"],
@@ -544,7 +544,7 @@ function viewPaper() {
       <label class="muted">최대 보유 <select onchange="setRule('hold', this.value)">${[72, 168].map(v => `<option ${+PHOLD === v ? "selected" : ""} value="${v}">${v}시간</option>`).join("")}</select></label>
       ${PSL + "-" + PTP + "-" + PHOLD !== "8-15-72" ? `<button onclick="setRule('sl','8');setRule('tp','15');setRule('hold','72')">기본값(8/15/72)으로</button>` : ""}
     </div>
-    <div class="row">${seg("g", CG, [["backfill", "과거 채움"], ["api", "실시간 기록"]], "setCG")}
+    <div class="row">${seg("g", CG, [["backfill", "하락장 60일"], ["bull", "상승장"], ["api", "실시간 기록"]], "setCG")}
       ${seg("p", PB, [["1", "BTC 20일선 위일 때만 매수"], ["0", "모든 신호 매수"]], "setPB")}
       ${seg("d", PDAYS, [["0", "전체 기간"], ["30", "최근 30일"], ["7", "최근 7일"]], "setPDAYS")}
       <label class="muted">1건당 금액 $<input type="number" value="${PAMT}" min="1" style="width:90px" onchange="setPAMT(this.value)"></label>

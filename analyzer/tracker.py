@@ -70,9 +70,27 @@ def db():
     return c
 
 
-def _grp(source):
-    """중복 판정/비교 그룹: 실시간(api)과 과거 채움(backfill/archive)을 섞지 않음."""
-    return ("api",) if source == "api" else ("archive", "backfill")
+GROUPS = {"api": "실시간 기록", "backfill": "하락장 60일 (26.09~11)", "bull": "상승장 (24.11~25.07)"}
+
+
+def _grp(x):
+    """그룹/출처 이름 → 같은 묶음으로 보는 source 들. 실시간·하락장 채움·상승장 채움을 섞지 않음."""
+    if x == "api":
+        return ("api",)
+    if x in ("backfill", "archive"):
+        return ("archive", "backfill")
+    if x.startswith("backfill_"):
+        return (x,)
+    return (f"backfill_{x}",)
+
+
+def src_name(group):
+    """과거 채움 그룹이 DB 에 쓰는 source 이름."""
+    return "backfill" if group in ("backfill", "archive") else f"backfill_{group}"
+
+
+def seed_path(group):
+    return SEED if group in ("backfill", "archive") else os.path.join(HERE, "data", f"backfill_{group}_seed.db")
 
 
 def record(con, source, t, sigs):
@@ -471,9 +489,10 @@ def update(con, src, source):
 def load(con, group="backfill"):
     g = _grp(group)
     df = pd.read_sql_query(f"SELECT * FROM signals WHERE source IN ({','.join('?' * len(g))})", con, params=g)
-    if group != "api" and not (df.source == "backfill").any() and os.path.exists(SEED):
-        with sqlite3.connect(SEED) as sc:
-            seed = pd.read_sql_query("SELECT * FROM signals WHERE source='backfill'", sc)
+    sp, sn = seed_path(group), src_name(group)
+    if group != "api" and not (df.source == sn).any() and os.path.exists(sp):
+        with sqlite3.connect(sp) as sc:
+            seed = pd.read_sql_query("SELECT * FROM signals WHERE source=?", sc, params=(sn,))
         df = pd.concat([seed, df], ignore_index=True)
     return df
 
@@ -484,8 +503,8 @@ def load_exits(con, group, rule):
     q = (f"SELECT e.signal_id AS id, e.ret AS xret, e.status AS xstatus, e.held AS xheld FROM exits e JOIN signals s ON s.id=e.signal_id "
          f"WHERE e.rule=? AND s.source IN ({','.join('?' * len(g))})")
     ex = pd.read_sql_query(q, con, params=(rule, *g))
-    if group != "api" and ex.empty and os.path.exists(SEED):
-        with sqlite3.connect(SEED) as sc:
+    if group != "api" and ex.empty and os.path.exists(seed_path(group)):
+        with sqlite3.connect(seed_path(group)) as sc:
             try:
                 ex = pd.read_sql_query("SELECT signal_id AS id, ret AS xret, status AS xstatus, held AS xheld FROM exits WHERE rule=?",
                                        sc, params=(rule,))
@@ -509,19 +528,20 @@ def tp_table(con, group, df, sl, hold):
     return out
 
 
-def export_seed():
-    """과거 채움 결과만 SEED 파일로 복사 (저장소 커밋용)."""
-    if os.path.exists(SEED):
-        os.remove(SEED)
+def export_seed(group="backfill"):
+    """과거 채움 결과만 seed 파일로 복사 (저장소 커밋용)."""
+    sp, sn = seed_path(group), src_name(group)
+    if os.path.exists(sp):
+        os.remove(sp)
     with sqlite3.connect(DB) as c:
-        c.execute(f"ATTACH DATABASE ? AS s", (SEED,))
-        c.execute("CREATE TABLE s.signals AS SELECT * FROM main.signals WHERE source='backfill'")
-        c.execute("CREATE TABLE s.exits AS SELECT e.* FROM main.exits e JOIN main.signals x ON x.id=e.signal_id WHERE x.source='backfill'")
+        c.execute("ATTACH DATABASE ? AS s", (sp,))
+        c.execute("CREATE TABLE s.signals AS SELECT * FROM main.signals WHERE source=?", (sn,))
+        c.execute("CREATE TABLE s.exits AS SELECT e.* FROM main.exits e JOIN main.signals x ON x.id=e.signal_id WHERE x.source=?", (sn,))
         n = c.execute("SELECT COUNT(*) FROM s.signals").fetchone()[0]
         c.commit()
-    with sqlite3.connect(SEED) as c:
+    with sqlite3.connect(sp) as c:
         c.execute("VACUUM")
-    print(f"seed 저장 {n}건 → {os.path.relpath(SEED, ps.ROOT)}")
+    print(f"seed 저장 {n}건 → {os.path.relpath(sp, ps.ROOT)}")
 
 
 def compare(df, btc_only=False):
@@ -613,7 +633,7 @@ def paper(df, amount=100.0, method=None, days=0, btc_only=False, ex=None):
 
 def write_compare(con, group):
     df = load(con, group)
-    L = [f"# 6가지 방식 비교 ({'실시간' if group == 'api' else '과거 채움'} 데이터)", ""]
+    L = [f"# 6가지 방식 비교 ({GROUPS.get(group, group)})", ""]
     if df.empty:
         L.append("신호 없음")
     else:
@@ -771,7 +791,9 @@ def main():
     ap.add_argument("--days", type=int, default=60, help="backfill: 과거 며칠")
     ap.add_argument("--every", type=int, default=4, help="backfill: 몇 시간마다 스캔")
     ap.add_argument("--end", default="", help="backfill: 마지막 시각 (기본 아카이브 마지막 날 다음 0시)")
-    ap.add_argument("--group", choices=["api", "backfill"], default="", help="report: 실시간/과거 채움 중 어느 데이터")
+    ap.add_argument("--group", default="", help="report/export-seed: api / backfill(하락장 60일) / bull 등 과거 채움 이름")
+    ap.add_argument("--tag", default="", help="backfill: 결과를 따로 묶을 이름 (예: bull). 비우면 기본 과거 채움")
+    ap.add_argument("--start", default="", help="backfill: 시작 시각 (주면 --days 대신 사용)")
     for k, v, t in [("top", 5, int), ("lookback", 72, int), ("launch-frac", 0.25, float), ("pick", 20, int), ("charts", 10, int),
                     ("min-qv", 2e6, float), ("max-chg", 0.15, float), ("range-hours", 24, int), ("recent", 4, int),
                     ("vol-mult", 2.0, float), ("workers", 8, int)]:
@@ -795,17 +817,20 @@ def main():
         print(f"성과 갱신 {update(con, src, a.source)}건")
         prune_library(os.path.join(ps.PAT_DIR, "library.jsonl"))
     elif a.cmd == "export-seed":
-        export_seed()
+        export_seed(a.group or "backfill")
     elif a.cmd == "report":
         write_compare(con, a.group or ("api" if a.source == "api" else "backfill"))
     else:
         rb_end = pd.Timestamp(__import__("regime_bt").archive_end()) + pd.Timedelta(days=1)
         end = pd.Timestamp(a.end) if a.end else rb_end
-        start = end - pd.Timedelta(days=a.days)
+        start = pd.Timestamp(a.start) if a.start else end - pd.Timedelta(days=a.days)
+        group = a.tag or "backfill"
+        sn = src_name(group)
         src = Backfill(start, end, workers=max(16, a.workers))
         m0.reproducible = True
         times = pd.date_range(start, end, freq=f"{a.every}h")
-        have = {r[0] for r in con.execute("SELECT DISTINCT scan_t FROM signals WHERE source='backfill'")}
+        have = {r[0] for r in con.execute("SELECT DISTINCT scan_t FROM signals WHERE source=?", (sn,))}
+        print(f"과거 채움 [{group}] {start} ~ {end}, {a.every}시간마다 {len(times)}회", flush=True)
         t0 = time.time()
         for i, t in enumerate(times):
             if str(t) in have:
@@ -816,12 +841,12 @@ def main():
             except Exception as e:
                 print(f"  {t} 실패: {type(e).__name__} {e}", flush=True)
                 continue
-            n = record(con, "backfill", now, sigs)
+            n = record(con, sn, now, sigs)
             el = time.time() - t0
             print(f"  [{i+1}/{len(times)}] {t:%m-%d %H:%M} 신호 {n}  ({el/60:.1f}분 경과)", flush=True)
-        src.set(rb_end)
-        print(f"성과 계산 {update(con, src, 'backfill')}건")
-        write_compare(con, "backfill")
+        src.set(min(rb_end, end + pd.Timedelta(days=8)))       # 마지막 신호도 168h 뒤까지 결과 계산
+        print(f"성과 계산 {update(con, src, sn)}건")
+        write_compare(con, group)
 
 
 if __name__ == "__main__":

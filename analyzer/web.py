@@ -118,7 +118,7 @@ def tracker_api(p, query):
     """6가지 방식 비교 / 최근 신호 (analyzer/data/tracker.db)."""
     from urllib.parse import parse_qs
     q = {k: v[0] for k, v in parse_qs(query).items()}
-    group = "api" if q.get("group") == "api" else "backfill"
+    group = q.get("group") if q.get("group") in ("api", "backfill", "bull") else "backfill"
     if HERE not in sys.path:
         sys.path.insert(0, HERE)
     import tracker
@@ -231,7 +231,8 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, tracker_api(p, u.query))
         if p == "/api/exits":
             from urllib.parse import parse_qs
-            g = "api" if parse_qs(u.query).get("group", [""])[0] == "api" else "backfill"
+            g = parse_qs(u.query).get("group", [""])[0]
+            g = g if g in ("api", "backfill", "bull") else "backfill"
             f = os.path.join(HERE, "data", f"exit_study_{g}.json")
             return self._send(200, _load_json(f)) if os.path.exists(f) else self._send(200, {})
         if p == "/api/status":

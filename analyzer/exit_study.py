@@ -197,7 +197,7 @@ def write_tp(res, tpg, path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--group", choices=["backfill", "api"], default="backfill")
+    ap.add_argument("--group", default="backfill", help="backfill(하락장 60일) / bull / api")
     a = ap.parse_args()
     con = tk.db()
     df = tk.load(con, a.group)
