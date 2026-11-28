@@ -369,7 +369,7 @@ function viewCompare() {
   if (!CMP) { fetch(`/api/compare?group=${CG}&btc=${CB}`).then(r => r.json()).then(d => { CMP = d; render(); }).catch(e => { CMP = errObj(e); render(); }); return `<div class="panel empty">불러오는 중…</div>`; }
   if (!SIGS) { fetch(`/api/signals?group=${CG}&limit=100`).then(r => r.json()).then(d => { SIGS = d; render(); }).catch(e => { SIGS = errObj(e); render(); }); }
   const head = `<div class="row" style="margin-bottom:12px">
-      ${seg("g", CG, [["backfill", "하락장 60일 (26.09~11)"], ["bull", "상승장 (24.11~25.07)"], ["range23", "횡보장 (23.03~10)"], ["api", "실시간 기록"]], "setCG")}
+      ${seg("g", CG, [["backfill", "하락장 60일 (26.09~11)"], ["bull", "상승장 (24.11~25.07)"], ["range23", "횡보장 (23.03~10)"], ["all", "3국면 합침"], ["api", "실시간 기록"]], "setCG")}
       ${seg("b", CB, [["1", "BTC 20일선 위일 때만 (기본)"], ["0", "모든 신호"]], "setCB")}</div>`;
   if (!CMP.info) return head + `<div class="panel empty">${CG === "api" ? "아직 실시간 기록이 없습니다. 스캔을 실행하면 신호가 쌓이고, 4h·24h·72h 뒤 성과가 자동 계산됩니다."
       : "과거 채움 데이터가 없습니다. 명령 프롬프트에서 <code>python analyzer\\tracker.py backfill --days 60</code> 실행."}</div>`;
@@ -417,6 +417,24 @@ function viewCompare() {
       <p class="note">값 = 거래당 평균 수익률(수수료 포함). 굵은 테두리 = 그 방식에서 가장 좋은 규칙. 칸에 마우스를 올리면 승률·PF·보유시간·앞/뒤 구간 성과.
       앞/뒤 두 구간 모두 좋아야 우연이 아닐 가능성이 높습니다. 다시 계산: <code>python analyzer\\exit_study.py</code></p></section>`;
   }
+  let regHtml = "";
+  if (CMP.regimes && CMP.regimes.length) {
+    const RG = CMP.regimes, gs = [...new Set(RG.map(r => r.regime))], ms = ["M1", "M2", "M3", "M4", "M5", "M6", "M0"];
+    const get = (g, m) => RG.find(r => r.regime === g && r.method === m);
+    const nm = g => g === "all" ? "<b>합계</b>" : esc(CMP.regime_names[g] || g);
+    const pfc = r => r?.pf == null ? "<td>–</td>" : `<td class="${r.pf >= 1 ? "up" : "down"}" title="거래 평균 ${pct(r.trade, 2)} · 승률 ${(r.trade_win * 100).toFixed(0)}% · 손익비 ${r.payoff?.toFixed(2) ?? "–"} · n=${r.n}">
+       <b>${r.pf.toFixed(2)}</b> <span class="muted">(${r.n})</span></td>`;
+    const tc = r => r?.trade == null ? "<td>–</td>" : `<td class="${cls(r.trade)}">${pct(r.trade, 2)}</td>`;
+    const beats = m => gs.filter(g => g !== "all").filter(g => (get(g, m)?.pf ?? 0) > (get(g, "M0")?.pf ?? 9)).length;
+    regHtml = `<section class="panel"><h2>국면별 비교 <span class="muted" style="font-weight:400">${CB === "1" ? "BTC 20일선 위일 때만" : "모든 신호"} · 손절8/익절15/72h</span></h2>
+      <div class="tw"><table><thead><tr><th class="l">방식</th>${gs.map(g => `<th>${nm(g)} PF (신호)</th>`).join("")}${gs.map(g => `<th>${nm(g)} 거래 평균</th>`).join("")}<th>무작위보다 PF 높은 국면</th></tr></thead><tbody>
+      ${ms.map(m => `<tr><td class="l"><span class="dot" style="background:${MCOLOR[m]}"></span><b>${m}</b> ${esc(CMP.methods[m] || "")}</td>
+        ${gs.map(g => pfc(get(g, m))).join("")}${gs.map(g => tc(get(g, m))).join("")}
+        <td>${m === "M0" ? "–" : `<b class="${beats(m) === gs.length - 1 ? "up" : ""}">${beats(m)} / ${gs.length - 1}</b>`}</td></tr>`).join("")}
+      </tbody></table></div>
+      <p class="note">세 국면 모두에서 무작위(M0)보다 PF 가 높아야 "방식 자체의 힘"일 가능성이 있습니다. 한 국면에서만 좋으면 그 국면의 장세 덕일 수 있습니다.
+      칸에 마우스를 올리면 승률·손익비. 괄호 = 신호 수.</p></section>`;
+  }
   let sigHtml = "";
   if (SIGS) {
     const scols = [
@@ -444,7 +462,7 @@ function viewCompare() {
      <section class="panel"><h2>상세 비교</h2>${table(cols, R)}
      <p class="note">기준선 대비 = 같은 기간 무작위 6종목(M0)의 72h 평균과의 차이. 0보다 커야 "아무 코인이나 산 것"보다 낫다는 뜻.
      MFE/MAE = 72시간 안 최대 상승/최대 하락. 같은 방식·같은 종목은 24시간 안에 다시 기록하지 않음. 신호 수가 적은 방식은 우연일 수 있음.<br>
-     손익비 = 이긴 거래 평균 이익 ÷ 진 거래 평균 손실. PF(Profit Factor) = 이익 합계 ÷ 손실 합계 — <b>1 이상이어야 돈을 번 것</b>. 거래 규칙 = 손절 -8% / 익절 +15% / 72h.</p></section>` + exitHtml + sigHtml;
+     손익비 = 이긴 거래 평균 이익 ÷ 진 거래 평균 손실. PF(Profit Factor) = 이익 합계 ÷ 손실 합계 — <b>1 이상이어야 돈을 번 것</b>. 거래 규칙 = 손절 -8% / 익절 +15% / 72h.</p></section>` + regHtml + exitHtml + sigHtml;
 }
 
 const BTMAP = {
@@ -482,7 +500,7 @@ function viewMethod(m) {
   const st = CMP?.rows?.find(r => r.method === m && !r.sub), base = CMP?.rows?.find(r => r.method === "M0" && !r.sub);
   const head = `<section class="panel"><h2><span class="dot" style="background:${MCOLOR[m]}"></span>${m} ${title}</h2>
       <p style="margin:0 0 10px">${rule}</p>
-      <div class="row">${seg("g", CG, [["backfill", "하락장 60일"], ["bull", "상승장"], ["range23", "횡보장 23"], ["api", "실시간 기록"]], "setCG")}
+      <div class="row">${seg("g", CG, [["backfill", "하락장 60일"], ["bull", "상승장"], ["range23", "횡보장 23"], ["all", "3국면 합침"], ["api", "실시간 기록"]], "setCG")}
       ${seg("b", CB, [["1", "BTC 20일선 위일 때만 (기본)"], ["0", "모든 신호"]], "setCB")}</div></section>` +
     (st ? stats([[st.n, "누적 신호"], [pct(st.trade, 2), "거래 평균 (손절8/익절15/72h)"], [st.trade_win == null ? "–" : (st.trade_win * 100).toFixed(0) + "%", "거래 승률"],
                  [`${pct(st.avg_win, 1)} / ${pct(st.avg_loss, 1)}`, "평균 이익 / 평균 손실"],
@@ -570,7 +588,7 @@ function viewPaper() {
       <label class="muted">최대 보유 <select onchange="setRule('hold', this.value)">${[72, 168].map(v => `<option ${+PHOLD === v ? "selected" : ""} value="${v}">${v}시간</option>`).join("")}</select></label>
       ${PSL + "-" + PTP + "-" + PHOLD !== "8-15-72" ? `<button onclick="setRule('sl','8');setRule('tp','15');setRule('hold','72')">기본값(8/15/72)으로</button>` : ""}
     </div>
-    <div class="row">${seg("g", CG, [["backfill", "하락장 60일"], ["bull", "상승장"], ["range23", "횡보장 23"], ["api", "실시간 기록"]], "setCG")}
+    <div class="row">${seg("g", CG, [["backfill", "하락장 60일"], ["bull", "상승장"], ["range23", "횡보장 23"], ["all", "3국면 합침"], ["api", "실시간 기록"]], "setCG")}
       ${seg("p", PB, [["1", "BTC 20일선 위일 때만 매수"], ["0", "모든 신호 매수"]], "setPB")}
       ${seg("d", PDAYS, [["0", "전체 기간"], ["30", "최근 30일"], ["7", "최근 7일"]], "setPDAYS")}
       <label class="muted">1건당 금액 $<input type="number" value="${PAMT}" min="1" style="width:90px" onchange="setPAMT(this.value)"></label>

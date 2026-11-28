@@ -118,7 +118,7 @@ def tracker_api(p, query):
     """6가지 방식 비교 / 최근 신호 (analyzer/data/tracker.db)."""
     from urllib.parse import parse_qs
     q = {k: v[0] for k, v in parse_qs(query).items()}
-    group = q.get("group") if q.get("group") in ("api", "backfill", "bull", "range23") else "backfill"
+    group = q.get("group") if q.get("group") in ("api", "backfill", "bull", "range23", "all") else "backfill"
     if HERE not in sys.path:
         sys.path.insert(0, HERE)
     import tracker
@@ -133,7 +133,9 @@ def tracker_api(p, query):
             info = dict(start=df.scan_t.min(), end=df.scan_t.max(), scans=int(df.scan_t.nunique()), n=len(df),
                         n72=int(df.r72.notna().sum()), btc_on=int(df.groupby("scan_t").btc_ok.first().sum()))
             return {"rows": tracker.compare(df, q.get("btc") == "1"), "info": info,
-                    "methods": tracker.METHODS, "rules": dict(sl=tracker.SL, tp=tracker.TP, hold=tracker.HOLD, fee=tracker.FEE)}
+                    "methods": tracker.METHODS, "rules": dict(sl=tracker.SL, tp=tracker.TP, hold=tracker.HOLD, fee=tracker.FEE),
+                    "regimes": tracker.regime_table(df, q.get("btc") == "1") if group == "all" else None,
+                    "regime_names": tracker.GROUPS}
         if p == "/api/paper":
             try:
                 amount = max(1.0, float(q.get("amount") or 100))
@@ -232,7 +234,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/exits":
             from urllib.parse import parse_qs
             g = parse_qs(u.query).get("group", [""])[0]
-            g = g if g in ("api", "backfill", "bull", "range23") else "backfill"
+            g = g if g in ("api", "backfill", "bull", "range23", "all") else "backfill"
             f = os.path.join(HERE, "data", f"exit_study_{g}.json")
             return self._send(200, _load_json(f)) if os.path.exists(f) else self._send(200, {})
         if p == "/api/status":

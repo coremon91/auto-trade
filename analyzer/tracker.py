@@ -70,7 +70,8 @@ def db():
     return c
 
 
-GROUPS = {"api": "실시간 기록", "backfill": "하락장 60일 (26.09~11)", "bull": "상승장 (24.11~25.07)", "range23": "횡보장 (23.03~10)"}
+GROUPS = {"api": "실시간 기록", "backfill": "하락장 60일 (26.09~11)", "bull": "상승장 (24.11~25.07)", "range23": "횡보장 (23.03~10)", "all": "3국면 합침"}
+HIST = ["backfill", "bull", "range23"]          # "all" = 이 세 과거 채움 국면을 합친 것
 
 
 def _grp(x):
@@ -487,6 +488,10 @@ def update(con, src, source):
 
 # ------------------------------------------------------------------ 비교
 def load(con, group="backfill"):
+    if group == "all":
+        parts = [load(con, g).assign(regime=g) for g in HIST]
+        parts = [p for p in parts if len(p)]
+        return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     g = _grp(group)
     df = pd.read_sql_query(f"SELECT * FROM signals WHERE source IN ({','.join('?' * len(g))})", con, params=g)
     sp, sn = seed_path(group), src_name(group)
@@ -499,6 +504,10 @@ def load(con, group="backfill"):
 
 def load_exits(con, group, rule):
     """규칙 하나의 신호별 결과 (local DB, 없으면 seed)."""
+    if group == "all":
+        parts = [load_exits(con, g, rule) for g in HIST]
+        parts = [p for p in parts if len(p)]
+        return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     g = _grp(group)
     q = (f"SELECT e.signal_id AS id, e.ret AS xret, e.status AS xstatus, e.held AS xheld FROM exits e JOIN signals s ON s.id=e.signal_id "
          f"WHERE e.rule=? AND s.source IN ({','.join('?' * len(g))})")
@@ -569,6 +578,22 @@ def compare(df, btc_only=False):
                             if (dt.trade <= 0).any() and dt.trade[dt.trade <= 0].sum() < 0 else None,
                             trade_sum=float(dt.trade.sum()) if len(dt) else None,
                             hit30=_m(d.hit30.dropna()), mfe_med=_md(d72.mfe), mae_med=_md(d72.mae)))
+    return out
+
+
+def regime_table(df, btc_only=False):
+    """방식 × 국면별 거래 성과 (3국면 합침 화면용)."""
+    if df.empty or "regime" not in df:
+        return []
+    out = []
+    for g in HIST + ["all"]:
+        d = df if g == "all" else df[df.regime == g]
+        if d.empty:
+            continue
+        for r in compare(d, btc_only):
+            if not r["sub"]:
+                out.append(dict(regime=g, method=r["method"], n=r["n"], trade=r["trade"], trade_win=r["trade_win"],
+                                payoff=r["payoff"], pf=r["pf"], excess72=r["excess72"]))
     return out
 
 
