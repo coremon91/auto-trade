@@ -14,3 +14,4 @@ data/backfill.log
 !analyzer/data/exit_study_*.json
 data/backfill_bull.log
 !analyzer/data/backfill_*_seed.db
+data/backfill_range23.log
