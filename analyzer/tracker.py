@@ -562,6 +562,11 @@ def compare(df, btc_only=False):
                             r4=_m(d.r4), r24=_m(d.r24), r72=_m(d72.r72), r72_med=_md(d72.r72),
                             win72=_m(d72.r72 > 0) if len(d72) else None, excess72=(_m(d72.r72) - b72) if len(d72) and np.isfinite(b72) else None,
                             trade=_m(dt.trade), trade_win=_m(dt.trade > 0) if len(dt) else None,
+                            avg_win=_m(dt.trade[dt.trade > 0]), avg_loss=_m(dt.trade[dt.trade <= 0]),
+                            payoff=(_m(dt.trade[dt.trade > 0]) / -_m(dt.trade[dt.trade <= 0]))
+                            if (dt.trade > 0).any() and (dt.trade <= 0).any() else None,
+                            pf=float(dt.trade[dt.trade > 0].sum() / -dt.trade[dt.trade <= 0].sum())
+                            if (dt.trade <= 0).any() and dt.trade[dt.trade <= 0].sum() < 0 else None,
                             trade_sum=float(dt.trade.sum()) if len(dt) else None,
                             hit30=_m(d.hit30.dropna()), mfe_med=_md(d72.mfe), mae_med=_md(d72.mae)))
     return out

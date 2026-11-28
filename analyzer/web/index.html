@@ -335,7 +335,16 @@ function btLegend() {
      <b>B</b> = A 에서 선행신호 뺀 것 · <b>C</b> = MANTRA형(7일 -15%↓, 24h -12%~+3%, OI 24h +10%↑)</span>
    <span>필터</span><span><b>BTC>SMA20</b> = BTC 일봉 종가가 20일 이동평균 위일 때만 진입 (없으면 필터 없음)</span>
   </div>
-  <p class="note">24개 변형 중 가장 좋은 것을 고르면 우연히 좋았던 것을 고를 위험(과최적화)이 있습니다. 거래 수가 적은 변형은 특히 주의.</p></section>`;
+  <p class="note">24개 변형 중 가장 좋은 것을 고르면 우연히 좋았던 것을 고를 위험(과최적화)이 있습니다. 거래 수가 적은 변형은 특히 주의.</p></section>
+  <section class="panel"><h2>백테스트 셋업과 6가지 방식(M1~M6)의 관계</h2>
+  <div class="tw"><table><thead><tr><th>백테스트 셋업</th><th class="l">조건</th><th class="l">가장 가까운 방식</th><th class="l">같은가?</th></tr></thead><tbody>
+   <tr><td class="l"><b>A</b></td><td class="l">7일 -15%↓ + 14일 저점 근처 + 선행신호(펀딩 ≤ -0.03% / 조용한 거래량 3배 / BB폭 하위 10%)</td><td class="l">M2(거래량), M4(낙폭)</td><td class="l">다름 — 여러 조건을 섞은 별도 셋업</td></tr>
+   <tr><td class="l"><b>B</b></td><td class="l">7일 -15%↓ + 14일 저점 근처 (낙폭 과대 매수)</td><td class="l">M4 RSI 과매도</td><td class="l">비슷한 계열, 조건 다름</td></tr>
+   <tr><td class="l"><b>C</b></td><td class="l">7일 -15%↓, 24h -12%~+3%, OI 24h +10%↑ (MANTRA형)</td><td class="l">M5 펀딩+OI</td><td class="l"><b>거의 같음</b> (M5 는 펀딩 ≤ 0 추가)</td></tr>
+   <tr><td class="l">–</td><td class="l">대응 셋업 없음</td><td class="l">M1, M3, M6</td><td class="l">6가지 비교 탭에서만 검증</td></tr>
+  </tbody></table></div>
+  <p class="note">진입·청산도 다릅니다. 백테스트: 셋업 후 4h 돌파 또는 15m 거래량 돌파를 기다렸다 진입, X1/X2 청산, 자산 10%씩 최대 10개.
+  6가지 비교: 신호 시점 종가에 바로 진입, 손절 -8% / 익절 +15% / 72h, 자금 제한 없음. 그래서 숫자를 직접 비교하지 말고 방향(국면별로 되는지/안 되는지)만 참고하세요.</p></section>`;
 }
 
 let LASTERR = null;
@@ -386,6 +395,10 @@ function viewCompare() {
     {h: "기준선 대비", v: x => x.excess72, f: x => pct(x.excess72, 2), c: x => cls(x.excess72)},
     {h: "거래 평균", v: x => x.trade, f: x => pct(x.trade, 2), c: x => cls(x.trade)},
     {h: "거래 승률", v: x => x.trade_win, f: x => x.trade_win == null ? "–" : (x.trade_win * 100).toFixed(0) + "%"},
+    {h: "평균 이익", v: x => x.avg_win, f: x => pct(x.avg_win, 2), c: () => "up"},
+    {h: "평균 손실", v: x => x.avg_loss, f: x => pct(x.avg_loss, 2), c: () => "down"},
+    {h: "손익비", v: x => x.payoff, f: x => x.payoff == null ? "–" : x.payoff.toFixed(2)},
+    {h: "PF", v: x => x.pf, f: x => x.pf == null ? "–" : `<b class="${x.pf >= 1 ? "up" : "down"}">${x.pf.toFixed(2)}</b>`},
     {h: "+30% 도달", v: x => x.hit30, f: x => x.hit30 == null ? "–" : (x.hit30 * 100).toFixed(1) + "%"},
     {h: "MFE 중앙", v: x => x.mfe_med, f: x => pct(x.mfe_med), c: () => "up"},
     {h: "MAE 중앙", v: x => x.mae_med, f: x => pct(x.mae_med), c: () => "down"},
@@ -430,9 +443,18 @@ function viewCompare() {
      <p class="note">72h 평균 = 신호 시점 종가에 사서 72시간 뒤 종가. 거래 평균 = 손절 -${ru.sl * 100}% / 익절 +${ru.tp * 100}% / ${ru.hold}h 청산, 수수료 ${ru.fee * 100}% 차감.</p></section>
      <section class="panel"><h2>상세 비교</h2>${table(cols, R)}
      <p class="note">기준선 대비 = 같은 기간 무작위 6종목(M0)의 72h 평균과의 차이. 0보다 커야 "아무 코인이나 산 것"보다 낫다는 뜻.
-     MFE/MAE = 72시간 안 최대 상승/최대 하락. 같은 방식·같은 종목은 24시간 안에 다시 기록하지 않음. 신호 수가 적은 방식은 우연일 수 있음.</p></section>` + exitHtml + sigHtml;
+     MFE/MAE = 72시간 안 최대 상승/최대 하락. 같은 방식·같은 종목은 24시간 안에 다시 기록하지 않음. 신호 수가 적은 방식은 우연일 수 있음.<br>
+     손익비 = 이긴 거래 평균 이익 ÷ 진 거래 평균 손실. PF(Profit Factor) = 이익 합계 ÷ 손실 합계 — <b>1 이상이어야 돈을 번 것</b>. 거래 규칙 = 손절 -8% / 익절 +15% / 72h.</p></section>` + exitHtml + sigHtml;
 }
 
+const BTMAP = {
+  M1: "백테스트에 대응하는 셋업 없음 — 이 탭의 기록이 유일한 검증입니다.",
+  M2: "백테스트 셋업 A 의 선행신호 중 하나('조용한 거래량 급증': 8h 거래량 3배 + 가격 ±3%)와 비슷하지만, A 는 '7일 -15% 이하 하락 중' 조건이 함께 있어야 해서 같은 방식은 아닙니다. 단독 검증은 이 탭이 유일합니다.",
+  M3: "백테스트에 대응하는 셋업 없음 (백테스트는 1h EMA20 을 진입 확인용으로만 사용).",
+  M4: "백테스트 셋업 B('7일 -15% 이하 + 14일 저점 근처' 낙폭 과대 매수)와 같은 '많이 빠진 코인 매수' 계열이지만 조건이 다릅니다 (M4 는 RSI 30 회복).",
+  M5: "<b>백테스트 셋업 C(MANTRA형)와 거의 같습니다</b> — 7일 -15%↓, 24h -12%~+3%, OI 24h +10%↑ 에 M5 는 '펀딩 ≤ 0' 이 추가. 백테스트 탭의 '…|C|…' 행이 이 방식의 국면별 결과입니다 (진입·청산 방식은 다름).",
+  M6: "백테스트에 대응하는 셋업 없음. 다만 백테스트의 'BTC>SMA20' 필터와 같은 BTC 장세 판단을 진입 조건에 씁니다.",
+};
 const RULES = {
   M1: ["급등 차트 유사", "24h 상승 상위 5개 종목의 '상승 직전' 차트(4h 42봉 · 1h 48봉 · 15m 48봉)와 특징값을 기록하고, 나머지 코인의 지금 차트와 비교해 가장 닮은 6종목."],
   M2: ["횡보 + 거래량 증가", "최근 4h 를 뺀 직전 24h 가 박스폭 3% 또는 5% 이내로 횡보했고, 최근 4h 평균 거래량이 박스 구간의 2배 이상인 종목 중 거래량 배수 상위 6개 (박스 하단 이탈 제외)."],
@@ -462,9 +484,13 @@ function viewMethod(m) {
       <p style="margin:0 0 10px">${rule}</p>
       <div class="row">${seg("g", CG, [["backfill", "하락장 60일"], ["bull", "상승장"], ["api", "실시간 기록"]], "setCG")}
       ${seg("b", CB, [["1", "BTC 20일선 위일 때만 (기본)"], ["0", "모든 신호"]], "setCB")}</div></section>` +
-    (st ? stats([[st.n, "누적 신호"], [pct(st.r72, 2), "72h 평균 수익률"], [st.win72 == null ? "–" : (st.win72 * 100).toFixed(0) + "%", "72h 승률"],
-                 [pct(st.trade, 2), "거래 평균 (손절/익절 규칙)"], [st.hit30 == null ? "–" : (st.hit30 * 100).toFixed(1) + "%", "+30% 도달"],
-                 [pct(st.excess72, 2), `무작위 대비 (기준선 ${pct(base?.r72, 2)})`]]) : "");
+    (st ? stats([[st.n, "누적 신호"], [pct(st.trade, 2), "거래 평균 (손절8/익절15/72h)"], [st.trade_win == null ? "–" : (st.trade_win * 100).toFixed(0) + "%", "거래 승률"],
+                 [`${pct(st.avg_win, 1)} / ${pct(st.avg_loss, 1)}`, "평균 이익 / 평균 손실"],
+                 [st.payoff == null ? "–" : st.payoff.toFixed(2), "손익비 (평균이익÷평균손실)"],
+                 [st.pf == null ? "–" : st.pf.toFixed(2), "PF (이익합÷손실합, 1 이상=수익)"],
+                 [st.hit30 == null ? "–" : (st.hit30 * 100).toFixed(1) + "%", "+30% 도달"],
+                 [pct(st.excess72, 2), `72h 무작위 대비 (기준선 ${pct(base?.r72, 2)})`]]) : "") +
+    `<p class="note" style="margin:-6px 0 14px">국면별 백테스트와의 관계: ${BTMAP[m]}</p>`;
   const picks = (RUN?.signals || []).filter(s => s.method === m);
   const cards = picks.length ? `<div class="cards">${picks.map(s => `<div class="card">
       ${s.png ? `<img src="${img(s.png)}" loading="lazy" onclick="zoom(this.src)">` : ""}
