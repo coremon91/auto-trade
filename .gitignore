@@ -11,3 +11,4 @@ analyzer/patterns/
 analyzer/data/*
 !analyzer/data/backfill_seed.db
 data/backfill.log
+!analyzer/data/exit_study_*.json

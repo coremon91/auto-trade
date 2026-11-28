@@ -222,6 +222,11 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, _load_json(BT)) if os.path.exists(BT) else self._send(200, {})
         if p in ("/api/compare", "/api/signals", "/api/paper"):
             return self._send(200, tracker_api(p, u.query))
+        if p == "/api/exits":
+            from urllib.parse import parse_qs
+            g = "api" if parse_qs(u.query).get("group", [""])[0] == "api" else "backfill"
+            f = os.path.join(HERE, "data", f"exit_study_{g}.json")
+            return self._send(200, _load_json(f)) if os.path.exists(f) else self._send(200, {})
         if p == "/api/status":
             return self._send(200, status())
         m = re.fullmatch(r"/img/(?:analyzer/)?(out|patterns)/([^/\\]+\.png)", p)   # 이전 실행 기록(역슬래시 경로)도 허용

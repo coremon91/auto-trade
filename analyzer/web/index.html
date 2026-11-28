@@ -153,6 +153,7 @@ const num = (v, d = 2) => v == null ? "–" : Number(v).toFixed(d);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const img = p => { if (!p) return null; const s = p.replace(/\\/g, "/").split("/"); return "/img/" + s[s.length - 2] + "/" + encodeURIComponent(s[s.length - 1]); };
 const money = v => v == null ? "–" : "$" + (v / 1e6).toFixed(1) + "M";
+let EXITS = null;
 let RUN = null, TAB = "compare", LIB = null, BT = null, CMP = null, SIGS = null, MSIG = {}, PAPER = null;
 let PAMT = 100, PDAYS = "0", PB = "1";
 try { PAMT = +(localStorage.getItem("pamt") || 100); PDAYS = localStorage.getItem("pdays") || "0"; PB = localStorage.getItem("pb") || "1"; } catch (e) {}
@@ -349,7 +350,7 @@ const MCOLOR = {M0: "#8a94a6", M1: "#2f6fde", M2: "#0f9d8a", M3: "#c27c0e", M4: 
 function seg(name, val, opts, cb) {
   return `<span class="seg">${opts.map(([v, l]) => `<button class="${v === val ? "on" : ""}" onclick="${cb}('${v}')">${l}</button>`).join("")}</span>`;
 }
-function setCG(v) { CG = v; CMP = null; SIGS = null; MSIG = {}; PAPER = null; try { localStorage.setItem("cg", v); } catch (e) {} render(); }
+function setCG(v) { CG = v; CMP = null; SIGS = null; EXITS = null; MSIG = {}; PAPER = null; try { localStorage.setItem("cg", v); } catch (e) {} render(); }
 function setCB(v) { CB = v; CMP = null; try { localStorage.setItem("cb2", v); } catch (e) {} render(); }
 
 function viewCompare() {
@@ -387,6 +388,19 @@ function viewCompare() {
     {h: "MAE 중앙", v: x => x.mae_med, f: x => pct(x.mae_med), c: () => "down"},
   ];
   const ru = CMP.rules;
+  if (!EXITS) fetch(`/api/exits?group=${CG}`).then(r => r.json()).then(d => { EXITS = d; render(); }).catch(() => { EXITS = {}; render(); });
+  let exitHtml = "";
+  if (EXITS && EXITS.summary) {
+    const S = EXITS.summary[CB === "1" ? "btc" : "all"], ms = Object.keys(S), names = Object.keys(EXITS.rules);
+    const cell = (m, nm) => { const r = S[m][nm], best = Object.values(S[m]).reduce((a, b) => b.avg > a.avg ? b : a);
+      const tip = `승률 ${(r.win * 100).toFixed(0)}% · PF ${r.pf == null ? "–" : r.pf.toFixed(2)} · 평균 ${r.hold.toFixed(0)}h 보유 · 앞 ${pct(r.first, 2)} / 뒤 ${pct(r.second, 2)} · n=${r.n}`;
+      return `<td class="${cls(r.avg)}" title="${tip}" style="${r === best ? "font-weight:700;outline:2px solid var(--accent);outline-offset:-2px" : ""}">${pct(r.avg, 2)}</td>`; };
+    exitHtml = `<section class="panel"><h2>청산 규칙 비교 <span class="muted" style="font-weight:400">같은 신호에 청산만 바꿈 · ${EXITS.n}건 · ${EXITS.start.slice(5, 10)}~${EXITS.end.slice(5, 10)}</span></h2>
+      <div class="tw"><table><thead><tr><th>규칙</th>${ms.map(m => `<th><span class="dot" style="background:${MCOLOR[m]}"></span>${m}</th>`).join("")}</tr></thead>
+      <tbody>${names.map(nm => `<tr><td class="l">${esc(nm)}</td>${ms.map(m => cell(m, nm)).join("")}</tr>`).join("")}</tbody></table></div>
+      <p class="note">값 = 거래당 평균 수익률(수수료 포함). 굵은 테두리 = 그 방식에서 가장 좋은 규칙. 칸에 마우스를 올리면 승률·PF·보유시간·앞/뒤 구간 성과.
+      앞/뒤 두 구간 모두 좋아야 우연이 아닐 가능성이 높습니다. 다시 계산: <code>python analyzer\\exit_study.py</code></p></section>`;
+  }
   let sigHtml = "";
   if (SIGS) {
     const scols = [
@@ -413,7 +427,7 @@ function viewCompare() {
      <p class="note">72h 평균 = 신호 시점 종가에 사서 72시간 뒤 종가. 거래 평균 = 손절 -${ru.sl * 100}% / 익절 +${ru.tp * 100}% / ${ru.hold}h 청산, 수수료 ${ru.fee * 100}% 차감.</p></section>
      <section class="panel"><h2>상세 비교</h2>${table(cols, R)}
      <p class="note">기준선 대비 = 같은 기간 무작위 6종목(M0)의 72h 평균과의 차이. 0보다 커야 "아무 코인이나 산 것"보다 낫다는 뜻.
-     MFE/MAE = 72시간 안 최대 상승/최대 하락. 같은 방식·같은 종목은 24시간 안에 다시 기록하지 않음. 신호 수가 적은 방식은 우연일 수 있음.</p></section>` + sigHtml;
+     MFE/MAE = 72시간 안 최대 상승/최대 하락. 같은 방식·같은 종목은 24시간 안에 다시 기록하지 않음. 신호 수가 적은 방식은 우연일 수 있음.</p></section>` + exitHtml + sigHtml;
 }
 
 const RULES = {
